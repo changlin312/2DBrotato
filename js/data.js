@@ -127,10 +127,13 @@ function enemyHpScale(wave) {
 
 function bossHpScale(wave) {
   const base = enemyHpScale(wave);
-  // 平衡：让 20 波 Boss 的击杀时间落在 10 与 30 波之间。
-  // 10 波用基础值；20 波额外 ×5 拉长战斗；30 波微 ×1.1 维持上限。
-  if (wave === 20) return base * 5;
-  if (wave === 30) return base * 1.1;
+  // 平衡目标（基于实际存档数据 run0）：
+  //   wave 10 Boss kill ≈ 30 秒，DPS ~ 0.5K；multip=1
+  //   wave 20 Boss kill ≈ 20-30 秒，DPS ~ 100K；multip=22 (使 HP 达 3M)
+  //   wave 30 Boss kill ≈ 60-90 秒，DPS ~ 300K；multip=38 (使 HP 达 18M)
+  // 由此保持 wave10 < boss20 < boss30，强度递增且不失控。
+  if (wave === 20) return base * 22;
+  if (wave === 30) return base * 38;
   return base;
 }
 

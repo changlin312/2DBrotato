@@ -29,3 +29,7 @@ tmp/
 # 本地配置（如需保留可移除此行）
 .env
 .env.local
+
+# 本地导出的游玩记录 JSON（看板导出产物，不入仓库）
+2dbrotato_runs_*.json
+*.Zone.Identifier
