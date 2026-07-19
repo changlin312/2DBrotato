@@ -59,11 +59,22 @@
   #shop-info { font-size: 15px; color: #ffd166; margin-top: 4px; }
   #shop-stats { font-size: 13px; color: #9ad; margin: 8px 0; line-height: 1.7; max-width: 760px; }
   .weapon-tag { display: inline-block; background: #33334f; border-radius: 4px; padding: 2px 8px; margin: 2px; font-size: 13px; }
+  .card .dupbtn { font-size: 11px; background: #4361ee; color: #fff; padding: 4px 8px; margin-top: 2px; }
+  .card .dupbtn:disabled { background: #555; color: #999; }
+  .inlinebtn { font-size: 12px; padding: 2px 10px; margin: 0 0 0 8px; background: #8df; color: #222; }
+  #btn-speed {
+    position: absolute; top: 8px; right: 8px; z-index: 6;
+    background: #3a3a55; color: #ffd166;
+    padding: 6px 14px; font-size: 16px; border-radius: 5px;
+    margin: 0;
+  }
+  #btn-speed:hover { background: #555577; }
 </style>
 </head>
 <body>
 <div id="wrap">
   <canvas id="cv" width="960" height="640"></canvas>
+  <button id="btn-speed">1x</button>
 
   <div id="menu" class="overlay">
     <h1>2DBrotato</h1>

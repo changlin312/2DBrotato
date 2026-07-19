@@ -42,19 +42,26 @@ function canBuyWeapon(id) {
   return p.weapons.length < MAX_WEAPONS ? 'new' : 'full';
 }
 
+function hasFreeWeaponSlot() { return G.player.weapons.length < MAX_WEAPONS; }
+
 function itemBlocked(id) {
   return id === 'coffee' && G.player.atkSpd >= 2.0;
 }
 
-function buyOffer(idx) {
+function buyOffer(idx, asDup) {
   const o = G.offers[idx];
   if (!o || o.sold || G.gold < o.price) return;
   const p = G.player;
   if (o.kind === 'weapon') {
-    const mode = canBuyWeapon(o.id);
-    if (mode === 'full' || mode === 'maxed') return;
-    if (mode === 'upgrade') p.weapons.find(w => w.id === o.id).tier++;
-    else p.weapons.push({ id: o.id, tier: 1, cd: 0, angle: 0 });
+    if (asDup) {
+      if (!hasFreeWeaponSlot()) return;
+      p.weapons.push({ id: o.id, tier: 1, cd: 0, angle: 0 });
+    } else {
+      const mode = canBuyWeapon(o.id);
+      if (mode === 'full' || mode === 'maxed') return;
+      if (mode === 'upgrade') p.weapons.find(w => w.id === o.id).tier++;
+      else p.weapons.push({ id: o.id, tier: 1, cd: 0, angle: 0 });
+    }
   } else {
     if (itemBlocked(o.id)) return;
     ITEMS[o.id].apply(p);
@@ -65,6 +72,29 @@ function buyOffer(idx) {
   o.sold = true;
   o.locked = false;
   renderShop();
+}
+
+function fuseSameWeapons() {
+  const p = G.player;
+  const wById = {};
+  p.weapons.forEach(w => {
+    if (!wById[w.id]) wById[w.id] = [];
+    wById[w.id].push(w);
+  });
+  let fused = 0;
+  for (const id in wById) {
+    const list = wById[id];
+    while (list.length >= 2) {
+      const a = list[0], b = list[1];
+      if (a.tier >= WEAPONS[id].maxTier || b.tier >= WEAPONS[id].maxTier) break;
+      a.tier += b.tier;
+      p.weapons.splice(p.weapons.indexOf(b), 1);
+      list.splice(1, 1);
+      fused++;
+    }
+  }
+  if (fused > 0) renderShop();
+  return fused;
 }
 
 function renderShop() {
@@ -92,13 +122,25 @@ function renderShop() {
     const disabled = o.sold || G.gold < o.price ||
       (o.kind === 'weapon' && ['full', 'maxed'].includes(canBuyWeapon(o.id))) ||
       (o.kind === 'item' && itemBlocked(o.id));
+    let dupBtn = '';
+    if (o.kind === 'weapon' && !o.sold) {
+      const owns = p.weapons.find(w => w.id === o.id);
+      const canDup = owns && hasFreeWeaponSlot();
+      if (canDup) {
+        dupBtn = `<button class="dupbtn" ${G.gold < o.price ? 'disabled' : ''}>另购副本</button>`;
+      }
+    }
     card.innerHTML = `
       <button class="lockbtn ${o.locked ? 'locked' : ''}">${o.locked ? '已锁定' : '锁定'}</button>
       <div class="cname">${name}</div>
       <div class="ctype">${type}${note ? ' · ' + note : ''}</div>
       <div class="cdesc">${desc}</div>
-      <button class="buybtn" ${disabled ? 'disabled' : ''}>${o.sold ? '已购买' : o.price + ' 金币'}</button>`;
+      <button class="buybtn" ${disabled ? 'disabled' : ''}>${o.sold ? '已购买' : o.price + ' 金币'}</button>
+      ${dupBtn}`;
     card.querySelector('.buybtn').onclick = () => buyOffer(idx);
+    if (card.querySelector('.dupbtn')) {
+      card.querySelector('.dupbtn').onclick = () => buyOffer(idx, true);
+    }
     card.querySelector('.lockbtn').onclick = () => {
       if (o.sold) return;
       o.locked = !o.locked;
@@ -117,16 +159,36 @@ function renderShop() {
 
   const wtags = p.weapons.map(w => {
     const d = WEAPONS[w.id];
-    return `<span class="weapon-tag" style="border-left:3px solid ${d.color}">${d.name} T${w.tier}</span>`;
+    const over = w.tier > d.maxTier ? ' ★' : '';
+    return `<span class="weapon-tag" style="border-left:3px solid ${d.color}">${d.name} T${w.tier}${over}</span>`;
   }).join('');
   const itags = Object.entries(p.items).map(([id, n]) =>
     `<span class="weapon-tag">${ITEMS[id].name}${n > 1 ? ' x' + n : ''}</span>`).join('');
   shopStats.innerHTML = `
-    武器 (${p.weapons.length}/${MAX_WEAPONS}): ${wtags || '无'}<br>
+    武器 (${p.weapons.length}/${MAX_WEAPONS}): ${wtags || '无'} ${hasFuseablePair() ? '<button id="fusebtn" class="inlinebtn">合成同名武器</button>' : ''}<br>
     道具: ${itags || '无'}<br>
     生命 ${Math.ceil(p.hp)}/${p.maxHp} · 伤害 +${Math.round((p.dmgMult - 1) * 100)}% ·
     攻速 +${Math.round((p.atkSpd - 1) * 100)}% · 移速 ${Math.round(p.speed)} ·
     护甲 ${p.armor} · 回复 ${p.regen.toFixed(1)}/秒 · 金币加成 +${Math.round((p.goldMult - 1) * 100)}%`;
+  const fb = document.getElementById('fusebtn');
+  if (fb) fb.onclick = () => {
+    const n = fuseSameWeapons();
+    if (n > 0) {
+      G.texts.push({ x: W / 2, y: 40, txt: `已合成 ${n} 组同名武器`, color: '#90e0ef',
+        vy: -8, life: 1.6, maxLife: 1.6, size: 18 });
+    }
+  };
+}
+
+function hasFuseablePair() {
+  const counts = {};
+  let any = false;
+  for (const w of G.player.weapons) {
+    if (w.tier >= WEAPONS[w.id].maxTier) continue;
+    counts[w.id] = (counts[w.id] || 0) + 1;
+    if (counts[w.id] === 2) any = true;
+  }
+  return any;
 }
 
 btnReroll.onclick = () => {

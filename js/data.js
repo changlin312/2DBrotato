@@ -28,15 +28,22 @@ const G = {
   runLog: [],
   curRun: null,
   waveStartTime: 0,
+  speedMul: 1,
+  pools: [],
+  lightnings: [],
 };
 
 const WEAPONS = {
-  pistol:  { name: '手枪',   price: 15, dmg: 8,  cd: 0.75, range: 330, spd: 520, pellets: 1, spread: 0,    pierce: 0, aoe: 0,  color: '#e8e8e8', maxTier: 26, desc: '每级命中分裂几率 +4% (最高80%)' },
-  smg:     { name: '冲锋枪', price: 30, dmg: 4,  cd: 0.14, range: 270, spd: 560, pellets: 1, spread: 0.18, pierce: 0, aoe: 0,  color: '#ffd166', maxTier: 31, desc: '每级 +2% 几率额外射出随机武器子弹 (最高50%)' },
-  shotgun: { name: '霰弹枪', price: 35, dmg: 5,  cd: 1.25, range: 215, spd: 480, pellets: 5, spread: 0.45, pierce: 0, aoe: 0,  color: '#f4a261', maxTier: 26, desc: '每 2 级弹丸 +1 颗 (最多+10)' },
-  sniper:  { name: '狙击枪', price: 45, dmg: 32, cd: 2.0,  range: 540, spd: 900, pellets: 1, spread: 0,    pierce: 3, aoe: 0,  color: '#90e0ef', maxTier: 31, desc: '曳光弹。每级暴击率 +3% (最高75%)，暴击3倍伤害' },
-  laser:   { name: '激光枪', price: 50, dmg: 12, cd: 0.5,  range: 360, spd: 720, pellets: 1, spread: 0,    pierce: 2, aoe: 0,  color: '#f72585', maxTier: 34, desc: '每级子弹体积 +25% (最大8倍)' },
-  rocket:  { name: '火箭筒', price: 55, dmg: 26, cd: 1.8,  range: 380, spd: 420, pellets: 1, spread: 0,    pierce: 0, aoe: 75, color: '#e63946', maxTier: 26, desc: '范围爆炸。每级爆炸范围 +20% (最大5倍)' },
+  pistol:  { name: '手枪',     price: 15, dmg: 8,  cd: 0.75, range: 330, spd: 520, pellets: 1, spread: 0,    pierce: 0, aoe: 0,  color: '#e8e8e8', maxTier: 26, desc: '每级命中分裂几率 +4% (最高80%)' },
+  smg:     { name: '冲锋枪',   price: 30, dmg: 4,  cd: 0.14, range: 270, spd: 560, pellets: 1, spread: 0.18, pierce: 0, aoe: 0,  color: '#ffd166', maxTier: 31, desc: '每级 +2% 几率额外射出随机武器子弹 (最高50%)' },
+  shotgun: { name: '霰弹枪',   price: 35, dmg: 5,  cd: 1.25, range: 215, spd: 480, pellets: 5, spread: 0.45, pierce: 0, aoe: 0,  color: '#f4a261', maxTier: 26, desc: '每 2 级弹丸 +1 颗 (最多+10)' },
+  sniper:  { name: '狙击枪',   price: 45, dmg: 32, cd: 2.0,  range: 540, spd: 900, pellets: 1, spread: 0,    pierce: 3, aoe: 0,  color: '#90e0ef', maxTier: 31, desc: '曳光弹。每级暴击率 +3% (最高75%)，暴击3倍伤害' },
+  laser:   { name: '激光枪',   price: 50, dmg: 12, cd: 0.5,  range: 360, spd: 720, pellets: 1, spread: 0,    pierce: 2, aoe: 0,  color: '#f72585', maxTier: 34, desc: '每级子弹体积 +25% (最大8倍)' },
+  rocket:  { name: '火箭筒',   price: 55, dmg: 26, cd: 1.8,  range: 380, spd: 420, pellets: 1, spread: 0,    pierce: 0, aoe: 75, color: '#e63946', maxTier: 26, desc: '范围爆炸。每级爆炸范围 +20% (最大5倍)' },
+  flame:   { name: '火焰喷射器', price: 40, dmg: 3,   cd: 0.06, range: 180, spd: 460, pellets: 1, spread: 0.22, pierce: 6,  aoe: 0,  color: '#ff6b35', maxTier: 26, desc: '近距离高射速穿透火焰，施加燃烧 DoT' },
+  frost:   { name: '冰冻弹',   price: 38, dmg: 16, cd: 0.55, range: 360, spd: 580, pellets: 1, spread: 0,    pierce: 2, aoe: 0,  color: '#56cfe1', maxTier: 26, desc: '命中减速 50% 持续 2 秒，每级减速时间 +0.1s' },
+  chain:   { name: '闪电雷',   price: 50, dmg: 22, cd: 0.7,  range: 300, spd: 0,    pellets: 1, spread: 0,    pierce: 0, aoe: 0,  color: '#ffe66d', maxTier: 26, desc: '瞬时连锁电击，每级 +1 跳跃数 (基础 3 跳)' },
+  molotov: { name: '燃烧瓶',   price: 45, dmg: 30, cd: 1.4,  range: 350, spd: 380, pellets: 1, spread: 0,    pierce: 0, aoe: 50, color: '#ff9e00', maxTier: 26, desc: '落地留下 4 秒火焰池，每级持续时间 +0.3s' },
 };
 
 const ITEMS = {
@@ -51,10 +58,16 @@ const ITEMS = {
 };
 
 const ENEMY_TYPES = {
-  zombie:  { name: '僵尸',   hp: 12, speed: 62,  dmg: 6,  r: 12, gold: 1, color: '#6a994e', weight: 10, minWave: 1 },
-  bat:     { name: '蝙蝠',   hp: 7,  speed: 118, dmg: 4,  r: 9,  gold: 1, color: '#9d4edd', weight: 6,  minWave: 2 },
-  tank:    { name: '重装兵', hp: 48, speed: 36,  dmg: 14, r: 18, gold: 3, color: '#bc6c25', weight: 3,  minWave: 3 },
-  shooter: { name: '射手',   hp: 16, speed: 46,  dmg: 6,  r: 11, gold: 2, color: '#e5989b', weight: 4,  minWave: 4, shoot: true },
+  zombie:   { name: '僵尸',   hp: 12, speed: 62,  dmg: 6,  r: 12, gold: 1, color: '#6a994e', weight: 10, minWave: 1 },
+  bat:      { name: '蝙蝠',   hp: 7,  speed: 118, dmg: 4,  r: 9,  gold: 1, color: '#9d4edd', weight: 6,  minWave: 2 },
+  tank:     { name: '重装兵', hp: 48, speed: 36,  dmg: 14, r: 18, gold: 3, color: '#bc6c25', weight: 3,  minWave: 3 },
+  shooter:  { name: '射手',   hp: 16, speed: 46,  dmg: 6,  r: 11, gold: 2, color: '#e5989b', weight: 4,  minWave: 4, shoot: true },
+  slime:    { name: '粘液怪', hp: 35, speed: 45,  dmg: 5,  r: 13, gold: 2, color: '#80b918', weight: 5,  minWave: 3, split: 0.6 },
+  spider:   { name: '蜘蛛',   hp: 10, speed: 138, dmg: 5,  r: 10, gold: 1, color: '#a663cc', weight: 6,  minWave: 4, zigzag: true },
+  bomber:   { name: '自爆虫', hp: 22, speed: 80,  dmg: 14, r: 13, gold: 2, color: '#f4a261', weight: 4,  minWave: 6, explode: 60 },
+  shielder: { name: '守卫者', hp: 75, speed: 38,  dmg: 9,  r: 17, gold: 4, color: '#4361ee', weight: 3,  minWave: 7, armor: 0.5 },
+  brute:    { name: '暴徒',   hp: 110, speed: 32, dmg: 22, r: 20, gold: 5, color: '#9d0208', weight: 2,  minWave: 9 },
+  hunter:   { name: '猎手',   hp: 50, speed: 60,  dmg: 8,  r: 14, gold: 3, color: '#fb6f92', weight: 3,  minWave: 11, shoot: true },
 };
 
 const BOSS_BASE_HP = 3600;
@@ -106,6 +119,15 @@ function enemyHpScale(wave) {
     v *= w === 11 || w === 21 ? 2 : (1 + g);
   }
   return v * Math.pow(1.5, G.bossKilled);
+}
+
+function bossHpScale(wave) {
+  const base = enemyHpScale(wave);
+  // 平衡：让 20 波 Boss 的击杀时间落在 10 与 30 波之间。
+  // 10 波用基础值；20 波额外 ×5 拉长战斗；30 波微 ×1.1 维持上限。
+  if (wave === 20) return base * 5;
+  if (wave === 30) return base * 1.1;
+  return base;
 }
 
 const RUNLOG_KEY = '2dbrotato_runlog_v1';
