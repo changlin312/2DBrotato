@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>2DBrotato 数据看板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #14141e; color: #eee;
+    font-family: "Microsoft YaHei", Arial, sans-serif;
+    padding: 18px;
+  }
+  h1 { color: #ffd166; margin-bottom: 14px; }
+  h2 { color: #90e0ef; margin: 18px 0 8px; }
+  .layout { display: grid; grid-template-columns: 240px 1fr; gap: 16px; }
+  .sidebar {
+    background: #1d1d2e; border-radius: 8px; padding: 10px;
+    max-height: 86vh; overflow-y: auto;
+  }
+  .main { min-width: 0; }
+  .run-item {
+    background: #23233a; border: 1px solid #33334f;
+    border-radius: 6px; padding: 8px 10px; margin: 6px 0;
+    cursor: pointer; font-size: 13px;
+  }
+  .run-item:hover { background: #2c2c45; }
+  .run-item.active { border-color: #ffd166; background: #2a2a14; }
+  .run-item .rtitle { font-weight: bold; color: #ffd166; }
+  .run-item .rmeta { font-size: 11px; color: #aaa; margin-top: 3px; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+  .tag.victory { background: #2a5130; color: #8dff8d; }
+  .tag.death { background: #512a2a; color: #ff8d8d; }
+  .tag.abandoned { background: #42424a; color: #ccc; }
+  .tag.active { background: #1c3a5a; color: #8dc4ff; }
+  .stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .stat-card {
+    background: #23233a; border-radius: 6px; padding: 10px 14px;
+    border-left: 3px solid #ffd166; min-width: 110px;
+  }
+  .stat-card .num { font-size: 22px; font-weight: bold; color: #ffd166; }
+  .stat-card .label { font-size: 12px; color: #aaa; }
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .chart-box {
+    background: #1d1d2e; border-radius: 8px; padding: 12px;
+    border: 1px solid #2c2c45;
+  }
+  .chart-box canvas { width: 100% !important; height: 240px !important; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+  th, td { padding: 6px 10px; text-align: center; border-bottom: 1px solid #2c2c45; }
+  th { color: #90e0ef; background: #1d1d2e; }
+  tr:hover td { background: #252540; }
+  .controls { margin-bottom: 12px; }
+  button {
+    background: #ffd166; color: #222; border: none;
+    padding: 8px 16px; font-size: 14px; font-weight: bold;
+    border-radius: 5px; cursor: pointer; margin-right: 6px;
+  }
+  button:hover { background: #ffe29a; }
+  button.danger { background: #c1121f; color: #fff; }
+  button.danger:hover { background: #e1384a; }
+  .empty { color: #666; padding: 24px; text-align: center; }
+  .hint { color: #888; font-size: 12px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<h1>2DBrotato 游戏记录看板</h1>
+<div class="hint">数据存储于浏览器 localStorage，键名 2dbrotato_runlog_v1（最多保留 30 局）</div>
+<div class="controls">
+  <button onclick="reloadData()">刷新数据</button>
+  <button class="danger" onclick="clearAll()">清空全部记录</button>
+  <button onclick="exportJSON()">导出 JSON</button>
+  <button onclick="importJSON()">导入 JSON</button>
+  <input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleFile(event)">
+</div>
+<div class="layout">
+  <div class="sidebar">
+    <div style="font-weight: bold; margin-bottom: 8px; color: #90e0ef;">对局列表</div>
+    <div id="runList"></div>
+  </div>
+  <div class="main">
+    <div id="runDetail"><div class="empty">请从左侧选择一局对局，或先游玩以创建记录</div></div>
+  </div>
+</div>
+
+<script>
+const RUNLOG_KEY = '2dbrotato_runlog_v1';
+let runs = [];
+let curIdx = -1;
+let charts = {};
+
+function loadRuns() {
+  try {
+    const data = localStorage.getItem(RUNLOG_KEY);
+    runs = data ? JSON.parse(data) : [];
+  } catch (e) { runs = []; }
+}
+
+function saveRuns() {
+  localStorage.setItem(RUNLOG_KEY, JSON.stringify(runs));
+}
+
+function reloadData() {
+  loadRuns();
+  renderList();
+  if (curIdx >= runs.length) curIdx = -1;
+  renderDetail();
+}
+
+function clearAll() {
+  if (!confirm('确定清空所有对局记录？')) return;
+  runs = [];
+  saveRuns();
+  reloadData();
+}
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(runs, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `2dbrotato_runs_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importJSON() {
+  document.getElementById('fileInput').click();
+}
+
+function handleFile(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const data = JSON.parse(r.result);
+      if (Array.isArray(data)) {
+        runs = data;
+        saveRuns();
+        reloadData();
+        alert(`导入成功，共 ${runs.length} 局记录`);
+      } else alert('文件格式错误：根节点应为数组');
+    } catch (err) { alert('解析失败: ' + err.message); }
+  };
+  r.readAsText(f);
+}
+
+function timeAgo(iso) {
+  const d = new Date(iso);
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 60) return `${s}秒前`;
+  if (s < 3600) return `${Math.floor(s/60)}分钟前`;
+  if (s < 86400) return `${Math.floor(s/3600)}小时前`;
+  return `${Math.floor(s/86400)}天前`;
+}
+
+function renderList() {
+  const el = document.getElementById('runList');
+  if (!runs.length) {
+    el.innerHTML = '<div class="empty">暂无记录</div>';
+    return;
+  }
+  el.innerHTML = runs.map((r, i) => {
+    const active = i === curIdx ? ' active' : '';
+    const tag = r.result;
+    return `<div class="run-item${active}" onclick="selectRun(${i})">
+      <div class="rtitle">第${r.finalWave}波 ${r.result === 'victory' ? '通关' : r.result === 'death' ? '阵亡' : '放弃'}</div>
+      <div class="rmeta">${timeAgo(r.ended || r.started)} · 击杀${r.totalKills}</div>
+      <span class="tag ${tag}">${tag}</span>
+    </div>`;
+  }).reverse().join('');
+}
+
+function selectRun(i) {
+  curIdx = i;
+  renderList();
+  renderDetail();
+}
+
+function avg(arr) { return arr.length ? arr.reduce((s,x)=>s+x,0)/arr.length : 0; }
+
+function fmtTime(s) {
+  return s == null ? '—' : (s < 60 ? (Math.round(s*10)/10) + 's' : (Math.round(s*10)/10) + 's');
+}
+
+function destroyCharts() {
+  Object.values(charts).forEach(c => { try { c.destroy(); } catch(e){} });
+  charts = {};
+}
+
+function renderDetail() {
+  destroyCharts();
+  const el = document.getElementById('runDetail');
+  if (curIdx < 0 || !runs[curIdx]) {
+    el.innerHTML = '<div class="empty">请从左侧选择一局对局</div>';
+    return;
+  }
+  const r = runs[curIdx];
+  const waves = r.waves.filter(w => w);
+
+  const html = `
+    <div class="stats-row">
+      <div class="stat-card"><div class="num">${r.finalWave}</div><div class="label">最终波次</div></div>
+      <div class="stat-card"><div class="num">${r.totalKills}</div><div class="label">总击杀</div></div>
+      <div class="stat-card"><div class="num">${r.totalGold}</div><div class="label">剩余金币</div></div>
+      <div class="stat-card"><div class="num">${r.result === 'victory' ? '通关' : r.result === 'death' ? '阵亡' : '放弃'}</div><div class="label">结果</div></div>
+      <div class="stat-card"><div class="num">${new Date(r.started).toLocaleString()}</div><div class="label">开始时间</div></div>
+    </div>
+    <div class="charts">
+      <div class="chart-box"><h2>波次用时</h2><canvas id="cWaveDur"></canvas></div>
+      <div class="chart-box"><h2>普通敌人平均击杀时间 (秒)</h2><canvas id="cAvgKill"></canvas></div>
+      <div class="chart-box"><h2>Boss 击杀时间</h2><canvas id="cBoss"></canvas></div>
+      <div class="chart-box"><h2>玩家数值成长</h2><canvas id="cPlayer"></canvas></div>
+      <div class="chart-box"><h2>敌人 HP 倍数曲线</h2><canvas id="cEnemy"></canvas></div>
+      <div class="chart-box"><h2>武器 Tier 成长</h2><canvas id="cWeapon"></canvas></div>
+    </div>
+    <h2>逐波详情</h2>
+    <table>
+      <thead>
+        <tr><th>波</th><th>类型</th><th>用时</th><th>普通击杀数</th><th>均击杀时间</th><th>Boss击杀</th><th>敌人HP倍数</th></tr>
+      </thead>
+      <tbody>
+        ${waves.map(w => `
+          <tr>
+            <td>${w.wave}</td>
+            <td>${w.isBossWave ? 'BOSS' : '普通'}</td>
+            <td>${fmtTime(w.waveDuration)}</td>
+            <td>${w.enemyKills.length}</td>
+            <td>${w.enemyKills.length ? fmtTime(avg(w.enemyKills)) : '—'}</td>
+            <td>${w.bossKillTime == null ? '—' : fmtTime(w.bossKillTime)}</td>
+            <td>${w.enemyHpScale.toFixed(1)}x</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+  el.innerHTML = html;
+  drawCharts(waves);
+}
+
+function drawCharts(waves) {
+  const labels = waves.map(w => '波' + w.wave);
+
+  charts.cWaveDur = new Chart(document.getElementById('cWaveDur'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: '波次用时 (秒)', data: waves.map(w => w.waveDuration), backgroundColor: '#ffd166' }] },
+    options: { responsive: false, plugins: { legend: { display: false } } }
+  });
+
+  charts.cAvgKill = new Chart(document.getElementById('cAvgKill'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: '平均击杀时间', data: waves.map(w => w.enemyKills.length ? avg(w.enemyKills) : 0), borderColor: '#90e0ef', backgroundColor: 'rgba(144,224,239,0.2)', tension: 0.3 }] },
+    options: { responsive: false, plugins: { legend: { display: false } } }
+  });
+
+  charts.cBoss = new Chart(document.getElementById('cBoss'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'Boss击杀时间', data: waves.map(w => w.bossKillTime == null ? null : w.bossKillTime), borderColor: '#ff5d5d', backgroundColor: 'rgba(255,93,93,0.2)', spanGaps: true, tension: 0.2 }] },
+    options: { responsive: false, plugins: { legend: { display: false } } }
+  });
+
+  const ps = waves.map(w => w.endSnapshot || w.startSnapshot);
+  const stats = ['dmgMult', 'atkSpd', 'speed', 'armor', 'regen', 'goldMult', 'maxHp'];
+  const colors = { dmgMult:'#ff6b35', atkSpd:'#ffd166', speed:'#90e0ef', armor:'#6a994e', regen:'#8dff8d', goldMult:'#ffd166', maxHp:'#ff5d8d' };
+  const datasets = stats.map(s => ({
+    label: s, data: ps.map(p => p ? p[s] : 0), borderColor: colors[s], tension: 0.25
+  }));
+  charts.cPlayer = new Chart(document.getElementById('cPlayer'), {
+    type: 'line', data: { labels, datasets },
+    options: { responsive: false, scales: { y: { beginAtZero: true } } }
+  });
+
+  charts.cEnemy = new Chart(document.getElementById('cEnemy'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: '敌人HP倍数', data: waves.map(w => w.enemyHpScale), borderColor: '#e63946', backgroundColor: 'rgba(230,57,70,0.2)', tension: 0.2 }] },
+    options: { responsive: false, plugins: { legend: { display: false } } }
+  });
+
+  const wids = ['pistol','smg','shotgun','sniper','laser','rocket'];
+  const wcolors = { pistol:'#e8e8e8', smg:'#ffd166', shotgun:'#f4a261', sniper:'#90e0ef', laser:'#f72585', rocket:'#e63946' };
+  const wsets = wids.map(wid => ({
+    label: wid, data: ps.map(p => {
+      if (!p) return 0;
+      const w = p.weapons.find(x => x.id === wid);
+      return w ? w.tier : 0;
+    }), borderColor: wcolors[wid], tension: 0.25
+  }));
+  charts.cWeapon = new Chart(document.getElementById('cWeapon'), {
+    type: 'line', data: { labels, datasets: wsets },
+    options: { responsive: false, scales: { y: { beginAtZero: true, stacked: false } } }
+  });
+}
+
+loadRuns();
+renderList();
+</script>
+</body>
+</html>
