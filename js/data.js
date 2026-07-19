@@ -54,7 +54,7 @@ const ITEMS = {
   magnet:   { name: '磁铁',     price: 15, desc: '拾取范围 +40',         apply: p => p.pickup += 40 },
   dumbbell: { name: '哑铃',     price: 28, desc: '所有伤害 +15%',        apply: p => p.dmgMult += 0.15 },
   leaf:     { name: '再生叶',   price: 30, desc: '每秒回复 0.6 生命',    apply: p => p.regen += 0.6 },
-  clover:   { name: '幸运草',   price: 25, desc: '金币获取 +20%',        apply: p => p.goldMult += 0.20 },
+  tree:     { name: '摇钱树',   price: 25, desc: '每波结束额外获得 波数×10 金币（每持有一棵 +5）', apply: p => {} },
 };
 
 const ENEMY_TYPES = {
@@ -83,7 +83,7 @@ function newPlayer() {
     x: W / 2, y: H / 2, r: 13,
     hp: 100, maxHp: 100,
     speed: 175, armor: 0, regen: 0,
-    dmgMult: 1, atkSpd: 1, pickup: 70, goldMult: 1,
+    dmgMult: 1, atkSpd: 1, pickup: 70,
     weapons: [{ id: 'pistol', tier: 1, cd: 0, angle: 0 }],
     hurtCd: 0, regenAcc: 0, faceX: 1,
     items: {},
@@ -167,7 +167,7 @@ function snapshotPlayer(p) {
     atkSpd: Math.round(p.atkSpd * 1000) / 1000,
     speed: Math.round(p.speed), armor: p.armor,
     regen: Math.round(p.regen * 100) / 100,
-    pickup: p.pickup, goldMult: Math.round(p.goldMult * 1000) / 1000,
+    pickup: p.pickup,
     weapons: p.weapons.map(w => ({ id: w.id, tier: w.tier })),
     items: Object.assign({}, p.items),
   };

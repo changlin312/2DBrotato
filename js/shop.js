@@ -202,7 +202,7 @@ function renderShop() {
     道具: ${itags || '无'}<br>
     生命 ${Math.ceil(p.hp)}/${p.maxHp} · 伤害 +${Math.round((p.dmgMult - 1) * 100)}% ·
     攻速 +${Math.round((p.atkSpd - 1) * 100)}% · 移速 ${Math.round(p.speed)} ·
-    护甲 ${p.armor} · 回复 ${p.regen.toFixed(1)}/秒 · 金币加成 +${Math.round((p.goldMult - 1) * 100)}%`;
+    护甲 ${p.armor} · 回复 ${p.regen.toFixed(1)}/秒 · 摇钱树 ×${(p.items.tree || 0)}`;
 
   // 武器槽交互区：每行一把武器，给出合成 / 出售按钮
   const wm = document.getElementById('weapon-manage');

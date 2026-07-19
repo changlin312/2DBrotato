@@ -76,6 +76,17 @@ function endWave() {
   recordWaveEnd(dur);
   G.state = 'shop';
   G.gold += 8 + G.wave * 2;
+  // 摇钱树年金：波数 × (10 + 5 × (持有数 - 1))
+  const trees = (G.player.items.tree || 0);
+  if (trees > 0) {
+    const bonus = G.wave * (10 + 5 * (trees - 1));
+    G.gold += bonus;
+    G.texts.push({
+      x: W / 2, y: 90, txt: `摇钱树 +${bonus}`,
+      color: '#e8b04b', vy: -20, life: 1.5, maxLife: 1.5, size: 18,
+    });
+    SFX.buy();
+  }
   for (const pk of G.pickups) if (pk.type === 'gold') collectPickup(pk);
   if (G.wave >= MAX_WAVE) { victory(); return; }
   openShop();
@@ -327,7 +338,7 @@ function damageEnemy(e, dmg, crit) {
 function collectPickup(pk) {
   const p = G.player;
   if (pk.type === 'gold') {
-    G.gold += Math.max(1, Math.round(pk.value * p.goldMult));
+    G.gold += Math.max(1, pk.value);
     SFX.coin();
   } else {
     p.hp = Math.min(p.maxHp, p.hp + 8);
