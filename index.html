@@ -2,94 +2,126 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>2DBrotato - 幸存者射击</title>
+<title>2DBrotato · 墨甲行者</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    background: #14141e;
-    color: #eee;
-    font-family: "Microsoft YaHei", sans-serif;
+    background:
+      radial-gradient(circle at 50% 20%, rgba(200, 140, 60, 0.07), transparent 55%),
+      repeating-linear-gradient(45deg, rgba(232, 176, 75, 0.02) 0 2px, transparent 2px 10px),
+      #131009;
+    color: #e8dcc4;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 100vh;
   }
   #wrap { position: relative; width: 960px; height: 640px; }
-  canvas { display: block; background: #1b1b28; border: 2px solid #3a3a55; border-radius: 6px; }
+  canvas {
+    display: block;
+    background: #17120d;
+    border: 3px solid #8a6d2b;
+    border-radius: 4px;
+    box-shadow: 0 0 0 1px #3a2e17, 0 0 30px rgba(200, 140, 60, 0.18);
+  }
   .overlay {
     position: absolute; inset: 0;
-    background: rgba(12, 12, 20, 0.92);
+    background: rgba(16, 12, 8, 0.94);
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    border-radius: 6px; text-align: center;
+    border-radius: 4px; text-align: center;
     overflow-y: auto;
   }
   .hidden { display: none; }
-  h1 { font-size: 42px; color: #ffd166; margin-bottom: 12px; }
-  h2 { font-size: 28px; color: #ffd166; margin: 14px 0 6px; }
-  .sub { color: #aaa; margin-bottom: 20px; line-height: 1.8; }
-  button {
-    background: #ffd166; color: #222; border: none;
-    padding: 10px 26px; font-size: 17px; font-weight: bold;
-    border-radius: 6px; cursor: pointer; margin: 6px;
+  h1 {
+    font-size: 46px; color: #e8b04b; margin-bottom: 6px;
+    font-family: "STKaiti", "KaiTi", serif;
+    letter-spacing: 10px;
+    text-shadow: 0 0 16px rgba(232, 176, 75, 0.4);
   }
-  button:hover { background: #ffe29a; }
-  button:disabled { background: #555; color: #999; cursor: not-allowed; }
+  h1 .sub-en {
+    display: block; font-size: 15px; letter-spacing: 6px;
+    color: #8a7f68; font-family: "Microsoft YaHei", sans-serif;
+    margin-top: 8px;
+  }
+  h2 {
+    font-size: 26px; color: #e8b04b; margin: 14px 0 6px;
+    font-family: "STKaiti", "KaiTi", serif; letter-spacing: 4px;
+  }
+  .sub { color: #cbb9a0; margin-bottom: 20px; line-height: 2.0; font-size: 15px; }
+  button {
+    background: #a32026; color: #f5e6c8;
+    border: 1px solid #c9a227;
+    padding: 10px 26px; font-size: 17px; font-weight: bold;
+    letter-spacing: 3px;
+    border-radius: 3px; cursor: pointer; margin: 6px;
+    font-family: inherit;
+  }
+  button:hover { background: #c3272b; box-shadow: 0 0 12px rgba(195, 39, 43, 0.5); }
+  button:disabled { background: #3a332a; color: #8a7f68; border-color: #555; cursor: not-allowed; box-shadow: none; }
   #shop-cards { display: flex; gap: 12px; margin: 12px 0; }
   .card {
-    width: 170px; background: #23233a; border: 1px solid #44446a;
-    border-radius: 8px; padding: 12px; display: flex;
-    flex-direction: column; gap: 6px; min-height: 170px;
+    width: 172px; background: #211a12; border: 1px solid #8a6d2b;
+    border-radius: 4px; padding: 12px; display: flex;
+    flex-direction: column; gap: 6px; min-height: 176px;
     position: relative;
   }
-  .card.sold { opacity: 0.35; }
-  .card.lockedcard { border-color: #ffd166; box-shadow: 0 0 6px rgba(255, 209, 102, 0.4); }
-  .card .lockbtn {
-    position: absolute; top: 6px; right: 6px;
-    background: #33334f; color: #aaa;
-    font-size: 11px; padding: 3px 8px; margin: 0;
-    border-radius: 4px;
+  .card::after {
+    content: ''; position: absolute; inset: 3px;
+    border: 1px solid rgba(232, 176, 75, 0.18);
+    pointer-events: none;
   }
-  .card .lockbtn:hover { background: #44446a; color: #fff; }
-  .card .lockbtn.locked { background: #ffd166; color: #222; }
-  .card .cname { font-size: 17px; font-weight: bold; margin-top: 14px; }
-  .card .ctype { font-size: 12px; color: #8ecae6; }
-  .card .cdesc { font-size: 13px; color: #bbb; flex: 1; }
-  .card button { font-size: 14px; padding: 6px 10px; margin: 0; }
-  #shop-info { font-size: 15px; color: #ffd166; margin-top: 4px; }
-  #shop-stats { font-size: 13px; color: #9ad; margin: 8px 0; line-height: 1.7; max-width: 760px; }
-  .weapon-tag { display: inline-block; background: #33334f; border-radius: 4px; padding: 2px 8px; margin: 2px; font-size: 13px; }
-  .card .dupbtn { font-size: 11px; background: #4361ee; color: #fff; padding: 4px 8px; margin-top: 2px; }
-  .card .dupbtn:disabled { background: #555; color: #999; }
+  .card.sold { opacity: 0.35; }
+  .card.lockedcard { border-color: #e8b04b; box-shadow: 0 0 8px rgba(232, 176, 75, 0.45); }
+  .card .lockbtn {
+    position: absolute; top: 6px; right: 6px; z-index: 2;
+    background: #3a332a; color: #cbb9a0; border-color: #6a5a33;
+    font-size: 11px; padding: 3px 8px; margin: 0; letter-spacing: 1px;
+  }
+  .card .lockbtn:hover { background: #4a4133; color: #f5e6c8; }
+  .card .lockbtn.locked { background: #c9a227; color: #1a1408; }
+  .card .cname { font-size: 17px; font-weight: bold; margin-top: 16px; color: #f5e6c8; font-family: "STKaiti", "KaiTi", serif; letter-spacing: 2px; }
+  .card .ctype { font-size: 12px; color: #c9a227; }
+  .card .cdesc { font-size: 12px; color: #a89880; flex: 1; line-height: 1.5; }
+  .card button { font-size: 13px; padding: 6px 10px; margin: 0; letter-spacing: 1px; }
+  .card .dupbtn { background: #2d5a3d; border-color: #57cc99; }
+  .card .dupbtn:hover { background: #3a7a52; box-shadow: 0 0 8px rgba(87, 204, 153, 0.4); }
+  .card .dupbtn:disabled { background: #3a332a; border-color: #555; }
+  #shop-info { font-size: 15px; color: #e8b04b; margin-top: 4px; letter-spacing: 2px; }
+  #shop-stats { font-size: 13px; color: #a89880; margin: 8px 0; line-height: 1.9; max-width: 780px; }
+  .weapon-tag {
+    display: inline-block; background: #2e2418; border: 1px solid #4a4133;
+    border-radius: 3px; padding: 2px 8px; margin: 2px; font-size: 13px; color: #e8dcc4;
+  }
   #weapon-manage {
     display: flex; flex-direction: column; gap: 4px;
-    margin: 6px 0; max-width: 580px;
+    margin: 6px 0; max-width: 620px;
   }
   .wm-row {
     display: flex; gap: 8px; align-items: center;
-    background: #23233a; padding: 6px 10px; border-radius: 5px;
-    border: 1px solid #33334f;
+    background: #211a12; padding: 6px 10px; border-radius: 3px;
+    border: 1px solid #4a4133;
   }
   .wm-row .wm-name {
     font-size: 14px; padding: 2px 10px;
-    background: #1d1d2e; border-radius: 4px; flex: 1;
+    background: #171209; border-radius: 3px; flex: 1; text-align: left;
+    color: #e8dcc4;
   }
-  .wm-row button {
-    font-size: 13px; padding: 4px 10px; margin: 0;
-  }
-  .wm-fuse { background: #56cfe1 !important; color: #14141e !important; }
-  .wm-fuse:hover { background: #80e7f5 !important; }
-  .wm-fuse:disabled { background: #4a4a55 !important; color: #777 !important; }
-  .wm-sell { background: #ffb703 !important; color: #14141e !important; }
-  .wm-sell:hover { background: #ffce4d !important; }
-  .inlinebtn { font-size: 12px; padding: 2px 10px; margin: 0 0 0 8px; background: #8df; color: #222; }
+  .wm-row button { font-size: 13px; padding: 4px 10px; margin: 0; letter-spacing: 1px; }
+  .wm-fuse { background: #2d5a3d !important; border-color: #57cc99 !important; }
+  .wm-fuse:hover { background: #3a7a52 !important; box-shadow: 0 0 8px rgba(87, 204, 153, 0.4) !important; }
+  .wm-fuse:disabled { background: #3a332a !important; border-color: #555 !important; }
+  .wm-sell { background: #8a6d2b !important; border-color: #e8b04b !important; }
+  .wm-sell:hover { background: #a8873a !important; box-shadow: 0 0 8px rgba(232, 176, 75, 0.4) !important; }
   #btn-speed {
     position: absolute; top: 8px; right: 8px; z-index: 6;
-    background: #3a3a55; color: #ffd166;
-    padding: 6px 14px; font-size: 16px; border-radius: 5px;
-    margin: 0;
+    background: #2e2418; color: #e8b04b; border-color: #8a6d2b;
+    padding: 6px 14px; font-size: 16px; border-radius: 3px;
+    margin: 0; letter-spacing: 1px;
   }
-  #btn-speed:hover { background: #555577; }
+  #btn-speed:hover { background: #3a2e1c; box-shadow: 0 0 8px rgba(232, 176, 75, 0.35); }
+  .victory-h1 { color: #57cc99 !important; text-shadow: 0 0 16px rgba(87, 204, 153, 0.4) !important; }
 </style>
 </head>
 <body>
@@ -98,42 +130,44 @@
   <button id="btn-speed">1x</button>
 
   <div id="menu" class="overlay">
-    <h1>2DBrotato</h1>
+    <h1>墨甲行者<span class="sub-en">2DBROTATO · 地 狱 试 炼</span></h1>
     <div class="sub">
-      WASD / 方向键 移动，武器自动瞄准射击<br>
-      在每波 30 秒的敌潮中幸存，捡取金币，商店中购买枪械与道具<br>
-      每 10 波将遭遇随机 BOSS，坚持到第 30 波即可通关！
+      WASD / 方向键 移动，武器自动索敌射击<br>
+      每波三十秒敌潮，幸存后入商铺购械置宝<br>
+      每逢十波，年兽 · 道士 · 机关傀儡 随机现身<br>
+      坚守三十波，便可破阵而出
     </div>
-    <button id="btn-start">开始游戏</button>
-    <button id="btn-dash" onclick="window.open('dashboard.html','_blank')">数据看板</button>
+    <button id="btn-start">入 阵</button>
+    <button id="btn-dash" onclick="window.open('dashboard.html','_blank')">功勋榜</button>
   </div>
 
   <div id="shop" class="overlay hidden">
-    <h2 id="shop-title">商店</h2>
+    <h2 id="shop-title">商铺</h2>
     <div id="shop-info"></div>
     <div id="shop-cards"></div>
     <div>
       <button id="btn-reroll">刷新</button>
       <button id="btn-buyall">一键购买</button>
-      <button id="btn-next">开始下一波</button>
+      <button id="btn-next">迎战下一波</button>
     </div>
     <div id="shop-stats"></div>
     <div id="weapon-manage"></div>
   </div>
 
   <div id="gameover" class="overlay hidden">
-    <h1>你死了</h1>
+    <h1>阵 亡</h1>
     <div class="sub" id="go-info"></div>
-    <button id="btn-restart">再来一局</button>
+    <button id="btn-restart">再战一局</button>
   </div>
 
   <div id="victory" class="overlay hidden">
-    <h1 style="color:#8dff8d">通关胜利!</h1>
+    <h1 class="victory-h1">破 阵 而 出</h1>
     <div class="sub" id="v-info"></div>
     <button id="btn-menu">回到主界面</button>
   </div>
 </div>
 <script src="js/data.js"></script>
+<script src="js/sprites.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/shop.js"></script>
 <script src="js/render.js"></script>

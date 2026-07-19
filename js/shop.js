@@ -71,6 +71,7 @@ function buyOffer(idx, asDup) {
   G.gold -= o.price;
   o.sold = true;
   o.locked = false;
+  SFX.buy();
   renderShop();
 }
 
@@ -125,6 +126,7 @@ function fusePairAt(idx) {
   if (partner < 0) return;
   a.tier += p.weapons[partner].tier;
   p.weapons.splice(partner, 1);
+  SFX.fuse();
   renderShop();
 }
 

@@ -63,6 +63,7 @@ function startWave() {
   G.state = 'play';
   G.waveStartTime = performance.now();
   recordWaveStart();
+  SFX.waveStart();
   if (G.wave % 10 === 0) spawnBoss();
 }
 
@@ -83,6 +84,7 @@ function endWave() {
 function victory() {
   G.state = 'over';
   finalizeRun('victory');
+  SFX.victory();
   document.getElementById('v-info').innerHTML =
     `你在 ${MAX_WAVE} 波敌潮中活了下来！<br>总击杀: ${G.kills} · 剩余金币: ${G.gold}`;
   victoryEl.classList.remove('hidden');
@@ -91,16 +93,18 @@ function victory() {
 function gameOver() {
   G.state = 'over';
   finalizeRun('death');
+  SFX.gameOver();
   document.getElementById('go-info').innerHTML =
     `你在第 <b>${G.wave}</b> 波倒下了<br>总击杀: ${G.kills} · 剩余金币: ${G.gold}`;
   goEl.classList.remove('hidden');
 }
 
 function spawnEnemy() {
-  const pool = Object.values(ENEMY_TYPES).filter(d => G.wave >= d.minWave);
-  let total = pool.reduce((s, d) => s + d.weight, 0);
-  let r = Math.random() * total, def = pool[0];
-  for (const d of pool) { r -= d.weight; if (r <= 0) { def = d; break; } }
+  const pool = Object.entries(ENEMY_TYPES).filter(([id, d]) => G.wave >= d.minWave);
+  let total = pool.reduce((s, [, d]) => s + d.weight, 0);
+  let r = Math.random() * total, picked = pool[0];
+  for (const entry of pool) { r -= entry[1].weight; if (r <= 0) { picked = entry; break; } }
+  const [eid, def] = picked;
 
   let x, y;
   const side = Math.floor(Math.random() * 4);
@@ -113,7 +117,7 @@ function spawnEnemy() {
   const dmgScale = 1 + 0.05 * (G.wave - 1);
   const elite = G.wave >= 3 && Math.random() < 0.05;
   G.enemies.push({
-    x, y, r: elite ? def.r * 1.3 : def.r, def,
+    x, y, r: elite ? def.r * 1.3 : def.r, def, id: eid,
     hp: def.hp * hpScale * (elite ? 2.5 : 1),
     maxHp: def.hp * hpScale * (elite ? 2.5 : 1),
     dmg: def.dmg * dmgScale * (elite ? 1.5 : 1),
@@ -137,6 +141,7 @@ function spawnBoss() {
   };
   G.enemies.push(boss);
   G.boss = boss;
+  SFX.bossSpawn();
   G.texts.push({
     x: W / 2, y: H / 2 - 60, txt: `BOSS — ${def.name}`,
     color: '#ff5d5d', vy: -12, life: 2, maxLife: 2, size: 34,
@@ -172,13 +177,14 @@ function updateBoss(e, dt, p) {
       e.flash = 0.15;
       const pool = ['zombie', 'bat', 'shooter'];
       for (let i = 0; i < 3; i++) {
-        const def = ENEMY_TYPES[pool[Math.floor(Math.random() * pool.length)]];
+        const mid = pool[Math.floor(Math.random() * pool.length)];
+        const def = ENEMY_TYPES[mid];
         const sa = rand(0, Math.PI * 2);
         const hps = enemyHpScale(G.wave);
         G.enemies.push({
           x: clamp(e.x + Math.cos(sa) * 60, 10, W - 10),
           y: clamp(e.y + Math.sin(sa) * 60, 10, H - 10),
-          r: def.r, def,
+          r: def.r, def, id: mid,
           hp: def.hp * hps,
           maxHp: def.hp * hps,
           dmg: def.dmg * (1 + 0.05 * (G.wave - 1)),
@@ -186,7 +192,7 @@ function updateBoss(e, dt, p) {
           hitCd: 0, shootCd: rand(1, 2.5),
         });
       }
-      boom(e.x, e.y, '#c77dff', 12);
+      boom(e.x, e.y, '#e8b04b', 12);
     }
   } else if (e.def.ai === 'bulletlord') {
     e.x += Math.cos(a) * e.speed * dt;
@@ -308,7 +314,7 @@ function damageEnemy(e, dmg, crit) {
         G.enemies.push({
           x: clamp(e.x + Math.cos(sa) * 20, 10, W - 10),
           y: clamp(e.y + Math.sin(sa) * 20, 10, H - 10),
-          r: sm.r, def: sm,
+          r: sm.r, def: sm, id: e.id,
           hp: sm.hp * enemyHpScale(G.wave), maxHp: sm.hp * enemyHpScale(G.wave),
           dmg: e.dmg * 0.6,
           speed: e.speed * 1.2, hitCd: 0, shootCd: 1, noSplit: true,
@@ -467,6 +473,7 @@ function update(dt) {
     const len = Math.hypot(dx, dy);
     p.x = clamp(p.x + dx / len * p.speed * dt, p.r, W - p.r);
     p.y = clamp(p.y + dy / len * p.speed * dt, p.r, H - p.r);
+    if (dx !== 0) p.faceX = dx > 0 ? 1 : -1;
   }
 
   if (p.regen > 0) p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);

@@ -1,6 +1,40 @@
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 
+// 墨色星野背景（离线画布，只绘制一次）：宣纸黑底 + 鎏金星点 + 流云弧 + 淡金经纬
+const bgCanvas = document.createElement('canvas');
+bgCanvas.width = W; bgCanvas.height = H;
+(function paintBG() {
+  const g = bgCanvas.getContext('2d');
+  g.fillStyle = '#17120d';
+  g.fillRect(0, 0, W, H);
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  g.strokeStyle = 'rgba(232,176,75,0.045)';
+  g.lineWidth = 1;
+  for (let x = 0; x <= W; x += 64) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+  for (let y = 0; y <= H; y += 64) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+  for (let i = 0; i < 110; i++) {
+    const x = rnd() * W, y = rnd() * H;
+    const r = rnd() < 0.85 ? 1 : 1.8;
+    g.fillStyle = `rgba(232,176,75,${0.05 + rnd() * 0.13})`;
+    g.fillRect(x, y, r, r);
+  }
+  for (let i = 0; i < 14; i++) {
+    const x = rnd() * W, y = rnd() * H, r = 1 + rnd() * 2;
+    g.fillStyle = `rgba(87,204,153,${0.04 + rnd() * 0.08})`;
+    g.fillRect(x, y, r, r);
+  }
+  g.strokeStyle = 'rgba(200,140,60,0.05)';
+  g.lineWidth = 14;
+  for (let i = 0; i < 4; i++) {
+    const cx = rnd() * W, cy = rnd() * H, cr = 120 + rnd() * 200;
+    g.beginPath();
+    g.arc(cx, cy, cr, rnd() * Math.PI * 2, rnd() * Math.PI * 2 + 1.2);
+    g.stroke();
+  }
+})();
+
 function render() {
   ctx.clearRect(0, 0, W, H);
 
@@ -10,24 +44,22 @@ function render() {
     ctx.translate(rand(-s, s), rand(-s, s));
   }
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-  ctx.lineWidth = 1;
-  for (let x = 0; x <= W; x += 64) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-  }
-  for (let y = 0; y <= H; y += 64) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-  }
+  ctx.drawImage(bgCanvas, 0, 0);
 
   if (!G.player) { ctx.restore(); return; }
   const p = G.player;
 
   for (const pk of G.pickups) {
-    ctx.fillStyle = pk.type === 'heal' ? '#ff6b8a' : '#ffd166';
+    ctx.fillStyle = pk.type === 'heal' ? '#57cc99' : '#e8b04b';
     ctx.beginPath();
     const r = pk.type === 'heal' ? 6 : Math.min(7, 3.5 + pk.value * 0.3);
     ctx.arc(pk.x, pk.y, r, 0, Math.PI * 2);
     ctx.fill();
+    if (pk.type === 'heal') {
+      ctx.fillStyle = '#17120d';
+      ctx.fillRect(pk.x - 1, pk.y - 4, 2, 8);
+      ctx.fillRect(pk.x - 4, pk.y - 1, 8, 2);
+    }
   }
 
   for (const pl of G.pools) {
@@ -123,7 +155,7 @@ function render() {
 
     if (e.slowTime > 0) {
       ctx.globalAlpha = 0.5;
-      ctx.strokeStyle = '#56cfe1';
+      ctx.strokeStyle = '#eaf4f4';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.r + 3, 0, Math.PI * 2);
@@ -143,12 +175,25 @@ function render() {
       ctx.globalAlpha = 1;
     }
 
-    ctx.fillStyle = e.flash > 0 ? '#ffffff' : e.def.color;
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, e.r * (e.flash > 0 ? 1.12 : 1), 0, Math.PI * 2);
-    ctx.fill();
+    const flip = G.player.x < e.x;
+    const size = e.r * (e.isBoss ? 2.6 : 2.4) * (e.flash > 0 ? 1.12 : 1);
+    const sid = e.isBoss ? e.def.ai : e.id;
+    if (!drawSprite(ctx, sid, e.x, e.y, size, flip)) {
+      ctx.fillStyle = e.def.color;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (e.flash > 0) {
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r * 1.12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     if (e.def.armor) {
-      ctx.strokeStyle = '#4361ee';
+      ctx.strokeStyle = '#57cc99';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.r + 2, -0.6, 2.5);
@@ -238,17 +283,22 @@ function render() {
     drawBullet(b);
   }
   for (const b of G.ebullets) {
-    ctx.fillStyle = '#ff5d8f';
+    ctx.fillStyle = '#ff4d4d';
     ctx.beginPath();
     ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  const flash = p.hurtCd > 0 && Math.floor(p.hurtCd * 20) % 2 === 0;
-  ctx.fillStyle = flash ? '#fff' : '#4cc9f0';
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-  ctx.fill();
+  const pflash = p.hurtCd > 0 && Math.floor(p.hurtCd * 20) % 2 === 0;
+  drawSprite(ctx, 'player', p.x, p.y, p.r * 2.6, p.faceX < 0);
+  if (pflash) {
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
 
   p.weapons.forEach((w, i) => {
     const n = p.weapons.length;
@@ -386,23 +436,23 @@ function drawBullet(b) {
 function drawHUD(p) {
   ctx.fillStyle = '#000a';
   ctx.fillRect(14, 14, 210, 20);
-  ctx.fillStyle = '#38b000';
+  ctx.fillStyle = '#2d9d78';
   ctx.fillRect(16, 16, 206 * clamp(p.hp / p.maxHp, 0, 1), 16);
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = '#f5e6c8';
   ctx.font = 'bold 12px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(`${Math.ceil(p.hp)} / ${p.maxHp}`, 119, 29);
 
   ctx.textAlign = 'left';
   ctx.font = 'bold 15px sans-serif';
-  ctx.fillStyle = '#ffd166';
+  ctx.fillStyle = '#e8b04b';
   ctx.fillText(`金币 ${G.gold}`, 16, 56);
-  ctx.fillStyle = '#ccc';
+  ctx.fillStyle = '#cbb9a0';
   ctx.fillText(`击杀 ${G.kills}`, 110, 56);
 
   ctx.textAlign = 'center';
   ctx.font = 'bold 20px sans-serif';
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = '#f5e6c8';
   ctx.fillText(`第 ${G.wave} / ${MAX_WAVE} 波`, W / 2, 32);
   if (G.boss && !G.boss.dead) {
     const b = G.boss;
@@ -411,11 +461,11 @@ function drawHUD(p) {
     ctx.fillStyle = b.def.color;
     ctx.fillRect(W / 2 - 178, 44, 356 * clamp(b.hp / b.maxHp, 0, 1), 14);
     ctx.font = 'bold 13px sans-serif';
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = '#f5e6c8';
     ctx.fillText(`BOSS · ${b.def.name}`, W / 2, 55);
   } else {
     ctx.font = 'bold 28px sans-serif';
-    ctx.fillStyle = G.waveTimer < 6 ? '#ff5d5d' : '#ffd166';
+    ctx.fillStyle = G.waveTimer < 6 ? '#ff5d5d' : '#e8b04b';
     ctx.fillText(Math.ceil(G.waveTimer), W / 2, 62);
   }
   ctx.textAlign = 'left';

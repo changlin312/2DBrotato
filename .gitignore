@@ -33,3 +33,4 @@ tmp/
 # 本地导出的游玩记录 JSON（看板导出产物，不入仓库）
 2dbrotato_runs_*.json
 *.Zone.Identifier
+*Zone.Identifier*
