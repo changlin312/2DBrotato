@@ -97,6 +97,37 @@ function fuseSameWeapons() {
   return fused;
 }
 
+function weaponRefund(w) {
+  // 大致估算 = 当波购买价 × 阶数 × 80%（含升级花费的总投入的约 80%）
+  return Math.max(1, Math.round(weaponPrice(w.id) * w.tier * 0.8));
+}
+
+function sellWeapon(idx) {
+  const w = G.player.weapons[idx];
+  if (!w) return;
+  G.gold += weaponRefund(w);
+  G.player.weapons.splice(idx, 1);
+  renderShop();
+}
+
+function fusePairAt(idx) {
+  const p = G.player;
+  const a = p.weapons[idx];
+  if (!a) return;
+  if (a.tier >= WEAPONS[a.id].maxTier) return;
+  // 寻找另一把同名且未超阶的武器
+  let partner = -1;
+  for (let i = 0; i < p.weapons.length; i++) {
+    if (i === idx) continue;
+    const x = p.weapons[i];
+    if (x.id === a.id && x.tier < WEAPONS[a.id].maxTier) { partner = i; break; }
+  }
+  if (partner < 0) return;
+  a.tier += p.weapons[partner].tier;
+  p.weapons.splice(partner, 1);
+  renderShop();
+}
+
 function renderShop() {
   const p = G.player;
   shopTitle.textContent = `商店 — 第 ${G.wave} 波已通过`;
@@ -165,19 +196,44 @@ function renderShop() {
   const itags = Object.entries(p.items).map(([id, n]) =>
     `<span class="weapon-tag">${ITEMS[id].name}${n > 1 ? ' x' + n : ''}</span>`).join('');
   shopStats.innerHTML = `
-    武器 (${p.weapons.length}/${MAX_WEAPONS}): ${wtags || '无'} ${hasFuseablePair() ? '<button id="fusebtn" class="inlinebtn">合成同名武器</button>' : ''}<br>
+    武器 (${p.weapons.length}/${MAX_WEAPONS}): ${wtags || '无'}<br>
     道具: ${itags || '无'}<br>
     生命 ${Math.ceil(p.hp)}/${p.maxHp} · 伤害 +${Math.round((p.dmgMult - 1) * 100)}% ·
     攻速 +${Math.round((p.atkSpd - 1) * 100)}% · 移速 ${Math.round(p.speed)} ·
     护甲 ${p.armor} · 回复 ${p.regen.toFixed(1)}/秒 · 金币加成 +${Math.round((p.goldMult - 1) * 100)}%`;
-  const fb = document.getElementById('fusebtn');
-  if (fb) fb.onclick = () => {
-    const n = fuseSameWeapons();
-    if (n > 0) {
-      G.texts.push({ x: W / 2, y: 40, txt: `已合成 ${n} 组同名武器`, color: '#90e0ef',
-        vy: -8, life: 1.6, maxLife: 1.6, size: 18 });
-    }
-  };
+
+  // 武器槽交互区：每行一把武器，给出合成 / 出售按钮
+  const wm = document.getElementById('weapon-manage');
+  if (wm) {
+    wm.innerHTML = '';
+    p.weapons.forEach((w, idx) => {
+      const d = WEAPONS[w.id];
+      const over = w.tier > d.maxTier;
+      // 是否还有同名未超阶的搭档可合成
+      let partner = -1;
+      for (let i = 0; i < p.weapons.length; i++) {
+        if (i === idx) continue;
+        const x = p.weapons[i];
+        if (x.id === w.id && x.tier < d.maxTier && w.tier < d.maxTier) { partner = i; break; }
+      }
+      const refund = weaponRefund(w);
+      const row = document.createElement('div');
+      row.className = 'wm-row';
+      row.innerHTML = `
+        <span class="wm-name" style="border-left:3px solid ${d.color}">
+          ${d.name} T${w.tier}${over ? ' ★' : ''}
+        </span>
+        <button class="wm-fuse" ${partner < 0 ? 'disabled' : ''} ${over ? 'disabled' : ''}>
+          ${over ? '已超阶' : (partner >= 0 ? `合成 → T${w.tier + p.weapons[partner].tier}` : '不可合成')}
+        </button>
+        <button class="wm-sell">出售 +${refund}金</button>`;
+      row.querySelector('.wm-fuse').onclick = () => fusePairAt(idx);
+      row.querySelector('.wm-sell').onclick = () => {
+        if (confirm(`出售 ${d.name} T${w.tier} 并获得 ${refund} 金币？`)) sellWeapon(idx);
+      };
+      wm.appendChild(row);
+    });
+  }
 }
 
 function hasFuseablePair() {

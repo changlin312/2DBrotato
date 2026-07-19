@@ -61,6 +61,27 @@
   .weapon-tag { display: inline-block; background: #33334f; border-radius: 4px; padding: 2px 8px; margin: 2px; font-size: 13px; }
   .card .dupbtn { font-size: 11px; background: #4361ee; color: #fff; padding: 4px 8px; margin-top: 2px; }
   .card .dupbtn:disabled { background: #555; color: #999; }
+  #weapon-manage {
+    display: flex; flex-direction: column; gap: 4px;
+    margin: 6px 0; max-width: 580px;
+  }
+  .wm-row {
+    display: flex; gap: 8px; align-items: center;
+    background: #23233a; padding: 6px 10px; border-radius: 5px;
+    border: 1px solid #33334f;
+  }
+  .wm-row .wm-name {
+    font-size: 14px; padding: 2px 10px;
+    background: #1d1d2e; border-radius: 4px; flex: 1;
+  }
+  .wm-row button {
+    font-size: 13px; padding: 4px 10px; margin: 0;
+  }
+  .wm-fuse { background: #56cfe1 !important; color: #14141e !important; }
+  .wm-fuse:hover { background: #80e7f5 !important; }
+  .wm-fuse:disabled { background: #4a4a55 !important; color: #777 !important; }
+  .wm-sell { background: #ffb703 !important; color: #14141e !important; }
+  .wm-sell:hover { background: #ffce4d !important; }
   .inlinebtn { font-size: 12px; padding: 2px 10px; margin: 0 0 0 8px; background: #8df; color: #222; }
   #btn-speed {
     position: absolute; top: 8px; right: 8px; z-index: 6;
@@ -97,6 +118,7 @@
       <button id="btn-next">开始下一波</button>
     </div>
     <div id="shop-stats"></div>
+    <div id="weapon-manage"></div>
   </div>
 
   <div id="gameover" class="overlay hidden">

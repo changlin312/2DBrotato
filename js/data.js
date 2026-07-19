@@ -115,8 +115,12 @@ function itemPrice(id) {
 function enemyHpScale(wave) {
   let v = 1.0;
   for (let w = 2; w <= wave; w++) {
-    const g = 0.15 + 0.005 * G.itemsBought;
-    v *= w === 11 || w === 21 ? 2 : (1 + g);
+    if (w === 11 || w === 21) { v *= 2; continue; }
+    let g = 0.15;
+    // 第 25 波后逐波衰减增长率，避免后段敌人血量爆炸。
+    // 26→13% 27→11% 28→9% 29→7% 30→5%; 30+ 后封顶 5%。
+    if (w > 25) g = Math.max(0.05, 0.15 - (w - 25) * 0.02);
+    v *= 1 + g;
   }
   return v * Math.pow(1.5, G.bossKilled);
 }
