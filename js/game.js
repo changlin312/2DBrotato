@@ -130,44 +130,65 @@ function spawnEnemy() {
   const hpScale = enemyHpScale(G.wave);
   const dmgScale = 1 + 0.05 * (G.wave - 1);
   const elite = G.wave >= 3 && Math.random() < 0.05;
+  // 第 20 波后 5% 概率出现 mega 精英（血量原 elite 3 倍）
+  const mega = elite && G.wave >= 21 && Math.random() < 0.3;
+  const hpMul = mega ? 8 : elite ? 2.5 : 1;
+  const sizeMul = mega ? 1.6 : elite ? 1.3 : 1;
   G.enemies.push({
-    x, y, r: elite ? def.r * 1.3 : def.r, def, id: eid,
-    hp: def.hp * hpScale * (elite ? 2.5 : 1),
-    maxHp: def.hp * hpScale * (elite ? 2.5 : 1),
-    dmg: def.dmg * dmgScale * (elite ? 1.5 : 1),
+    x, y, r: def.r * sizeMul, def, id: eid,
+    hp: def.hp * hpScale * hpMul,
+    maxHp: def.hp * hpScale * hpMul,
+    dmg: def.dmg * dmgScale * (mega ? 2 : elite ? 1.5 : 1),
     speed: def.speed * rand(0.9, 1.1),
     hitCd: 0, shootCd: rand(1, 2.5),
-    elite,
+    elite, mega,
   });
+}
+
+function makeBoss(def, x, y) {
+  const hps = bossHpScale(G.wave) / (G.wave >= 30 ? 2 : 1); // 双 Boss 时血量减半
+  const aggressive = G.wave > 20;
+  const boss = {
+    x, y, r: def.r, def, isBoss: true,
+    hp: BOSS_BASE_HP * hps, maxHp: BOSS_BASE_HP * hps,
+    dmg: def.dmg * (1 + 0.05 * (G.wave - 1)),
+    speed: def.speed * (aggressive ? 1.15 : 1),
+    hitCd: 0, aggressive,
+    state: 'move', stateT: 2.4, vx: 0, vy: 0,
+    chargeT: aggressive ? (2 + Math.random() * 1.5) : (4 + Math.random() * 2),
+    dashT: 0, dashAngle: 0, aimX: 0, aimY: 0,
+    aiT: aggressive ? 2.5 : 3.0, aimT: 1.2, warnT: 0,
+    laserT: aggressive ? (6 + Math.random() * 2) : (9 + Math.random() * 2),
+    flameT: aggressive ? (4.5 + Math.random() * 1.5) : (7 + Math.random() * 2),
+  };
+  if (def.ai === 'summoner') boss.aiT = aggressive ? 3.3 : 4.2;
+  return boss;
 }
 
 function spawnBoss() {
   const ids = Object.keys(BOSSES);
   const def = BOSSES[ids[Math.floor(Math.random() * ids.length)]];
-  const hps = bossHpScale(G.wave);
-  const boss = {
-    x: W / 2, y: 80, r: def.r, def, isBoss: true,
-    hp: BOSS_BASE_HP * hps, maxHp: BOSS_BASE_HP * hps,
-    dmg: def.dmg * (1 + 0.05 * (G.wave - 1)),
-    speed: def.speed,
-    hitCd: 0,
-    // 共用冲撞系统
-    state: 'move', stateT: 2.4, vx: 0, vy: 0,
-    chargeT: 4 + Math.random() * 2,
-    dashT: 0, dashAngle: 0, aimX: 0, aimY: 0,
-    // 各自专项
-    aiT: 3.0, aimT: 1.2, warnT: 0,
-    laserT: 8 + Math.random() * 2,
-    flameT: 6 + Math.random() * 2,
-  };
-  if (def.ai === 'summoner') boss.aiT = 4.0;
+  const boss = makeBoss(def, W / 2, 100);
   G.enemies.push(boss);
   G.boss = boss;
   SFX.bossSpawn();
-  G.texts.push({
-    x: W / 2, y: H / 2 - 60, txt: `BOSS — ${def.name}`,
-    color: '#ff5d5d', vy: -12, life: 2, maxLife: 2, size: 34,
-  });
+
+  // 第 30 波同时面对两个不同 Boss
+  if (G.wave === 30) {
+    const remain = ids.filter(k => k !== def.ai);
+    const def2 = BOSSES[remain[Math.floor(Math.random() * remain.length)]];
+    const boss2 = makeBoss(def2, W / 2, H - 100);
+    G.enemies.push(boss2);
+    G.texts.push({
+      x: W / 2, y: H / 2 - 60, txt: `双双现身！${def.name} · ${def2.name}`,
+      color: '#ff5d5d', vy: -12, life: 2.5, maxLife: 2.5, size: 32,
+    });
+  } else {
+    G.texts.push({
+      x: W / 2, y: H / 2 - 60, txt: `BOSS — ${def.name}`,
+      color: '#ff5d5d', vy: -12, life: 2, maxLife: 2, size: 34,
+    });
+  }
 }
 
 // 统一冲撞：telegraph 0.5s → 突进 0.6s → 恢复
@@ -223,6 +244,17 @@ function bossChargeCommon(e, dt, p) {
 }
 
 function updateBoss(e, dt, p) {
+  // 被 Boss 级冻结时不动
+  if (e.frozenT > 0) {
+    e.frozenT -= dt;
+    if (e.frozenT <= 0 && e.pendingImmune) {
+      e.frozenImmuneT = 5;
+      e.pendingImmune = false;
+      e.frozenAccum = 0;
+    }
+    return;
+  }
+  if (e.frozenImmuneT > 0) e.frozenImmuneT -= dt;
   const a = Math.atan2(p.y - e.y, p.x - e.x);
   const d = Math.hypot(p.x - e.x, p.y - e.y);
 
@@ -275,7 +307,7 @@ function updateBoss(e, dt, p) {
       for (let i = 0; i < 4; i++) {
         const tx = clamp(p.x + rand(-90, 90), 30, W - 30);
         const ty = clamp(p.y + rand(-90, 90), 30, H - 30);
-        spawnHazard(tx, ty, 32, 3.5, e.dmg * 0.7);
+        spawnHazard(tx, ty, 32, 3.5, e.dmg * 0.7, 2);
       }
       SFX.explosion();
       boom(e.x, e.y, '#9d4edd', 16);
@@ -318,8 +350,26 @@ function updateBoss(e, dt, p) {
   e.y = clamp(e.y, e.r, H - e.r);
 }
 
-function spawnHazard(x, y, r, time, dps) {
-  G.hazards.push({ x, y, r, time, maxTime: time, dps, tickT: 0, sparkT: 0 });
+function spawnHazard(x, y, r, time, dps, telegraph) {
+  // telegraph 阶段（默认 0）：火焰坑提前预警
+  if (telegraph && telegraph > 0) {
+    G.hazards.push({ x, y, r, teleT: telegraph, teleMax: telegraph, phase: 'tele', time, maxTime: time, dps, tickT: 0, sparkT: 0 });
+  } else {
+    G.hazards.push({ x, y, r, time, maxTime: time, dps, tickT: 0, sparkT: 0 });
+  }
+}
+
+// 冻结：依据阶数定时长（最多 5 秒），Boss 时长一半；累计达 5s 后 5s 免疫
+function applyFrost(e, freezeDur) {
+  if (e.frozenImmuneT > 0) return;
+  let dur = freezeDur;
+  if (e.isBoss) dur *= 0.5;
+  if (e.frozenImmuneT === undefined) e.frozenImmuneT = 0;
+  if (e.frozenAccum === undefined) e.frozenAccum = 0;
+  // 叠加时长
+  e.frozenT = Math.min(5, (e.frozenT || 0) + dur);
+  e.frozenAccum += dur;
+  if (e.frozenAccum >= 5) e.pendingImmune = true;
 }
 
 function spawnLaser(x, y, angle, warnTime, fireTime, dmg) {
@@ -441,6 +491,8 @@ function makeBullet(wid, x, y, a, tier, dmgMult, opts) {
     crit: wid === 'sniper' ? Math.min(0.75, 0.03 * t) : 0,
     split: wid === 'pistol' ? Math.min(0.8, 0.04 * t) : 0,
     slow: wid === 'frost' ? 2.0 + 0.1 * t : 0,
+    freezeDur: wid === 'frost' ? Math.min(5, 1.2 + 0.4 * t) : 0,
+    freezeR: 75,
     burn: wid === 'flame' ? { time: 1.2, dps: d.dmg * Math.pow(1.5, t) * dmgMult * 0.4 } : null,
     chain: wid === 'chain' ? 3 + Math.floor(t / 1) : 0,
     chainRange: 180,
@@ -494,7 +546,9 @@ function fireWeapon(w, target) {
 function explode(x, y, radius, dmg) {
   SFX.explosion();
   G.shake = Math.max(G.shake, 0.2);
-  G.rings.push({ x, y, r: 10, maxR: radius, life: 0.35, maxLife: 0.35 });
+  // 双层冲击光环（匹配实际爆炸半径）
+  G.rings.push({ x, y, r: 5, maxR: radius, life: 0.4, maxLife: 0.4 });
+  G.rings.push({ x, y, r: 5, maxR: radius * 0.7, life: 0.5, maxLife: 0.5 });
   // 主体散射火焰粒子（24 颗）
   for (let i = 0; i < 24; i++) {
     const a = rand(0, Math.PI * 2), s = rand(60, 320);
@@ -504,12 +558,15 @@ function explode(x, y, radius, dmg) {
       life: rand(0.25, 0.6), maxLife: 0.6,
     });
   }
-  // 烟灰上浮
-  for (let i = 0; i < 8; i++) {
-    const a = rand(0, Math.PI * 2), s = rand(20, 70);
+  // 烟灰上浮（量增加，半径以内散布）
+  for (let i = 0; i < 14; i++) {
+    const a = rand(0, Math.PI * 2);
+    const offs = radius * 0.4 * Math.random();
     G.particles.push({
-      x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30,
-      r: rand(4, 8), color: '#555', life: rand(0.4, 0.8), maxLife: 0.8,
+      x: x + Math.cos(a) * offs, y: y + Math.sin(a) * offs,
+      vx: Math.cos(a) * rand(20, 60), vy: Math.sin(a) * rand(20, 60) - 40,
+      r: rand(5, 11), color: i % 3 === 0 ? '#2a2018' : '#555',
+      life: rand(0.5, 1.1), maxLife: 1.1,
     });
   }
   // 放射状 8 道火焰长尾（每道 5 颗串联）
@@ -524,6 +581,20 @@ function explode(x, y, radius, dmg) {
         life: 0.3 + k * 0.05, maxLife: 0.55,
       });
     }
+  }
+  // 新增：环形火焰粒子向四周扩散（紧贴爆炸半径）
+  const ringCount = 22;
+  for (let i = 0; i < ringCount; i++) {
+    const a = (i / ringCount) * Math.PI * 2 + rand(-0.07, 0.07);
+    const startR = radius * 0.1;
+    G.particles.push({
+      x: x + Math.cos(a) * startR,
+      y: y + Math.sin(a) * startR,
+      vx: Math.cos(a) * radius * 2.5, vy: Math.sin(a) * radius * 2.5,
+      r: rand(4, 7),
+      color: ['#ff6b35', '#ff9f1c', '#e63946', '#fff3b0'][Math.floor(rand(0, 4))],
+      life: 0.4, maxLife: 0.4,
+    });
   }
   for (const e of G.enemies) {
     if (!e.dead && dist2(x, y, e.x, e.y) < radius * radius) damageEnemy(e, dmg);
@@ -658,6 +729,28 @@ function update(dt) {
           if (b.crit && Math.random() < b.crit) { dmg *= 3; crit = true; }
           damageEnemy(e, dmg, crit);
           if (b.slow > 0) { e.slowTime = Math.max(e.slowTime || 0, b.slow); }
+          if (b.freezeDur > 0) {
+            applyFrost(e, b.freezeDur);
+            // 范围冻结相邻敌人（半伤害 + 半时长）
+            for (const e2 of G.enemies) {
+              if (e2.dead || e2 === e) continue;
+              if (dist2(b.x, b.y, e2.x, e2.y) < b.freezeR * b.freezeR) {
+                damageEnemy(e2, b.dmg * 0.5, false);
+                applyFrost(e2, b.freezeDur * 0.5);
+                if (b.slow > 0) e2.slowTime = Math.max(e2.slowTime || 0, b.slow);
+                b.hits.push(e2);
+              }
+            }
+            // 冰冻冲击粒子
+            for (let i = 0; i < 6; i++) {
+              const sa = rand(0, Math.PI * 2);
+              G.particles.push({
+                x: b.x, y: b.y,
+                vx: Math.cos(sa) * 120, vy: Math.sin(sa) * 120,
+                r: rand(2, 4), color: '#eaf4f4', life: 0.3, maxLife: 0.3,
+              });
+            }
+          }
           if (b.burn) {
             e.burnTime = Math.max(e.burnTime || 0, b.burn.time);
             e.burnDps = b.burn.dps;
@@ -695,6 +788,24 @@ function update(dt) {
 
   for (const e of G.enemies) {
     if (e.dead) continue;
+    // 冻结与抗性倒计时
+    if (e.frozenT > 0) {
+      e.frozenT -= dt;
+      if (e.frozenT <= 0) {
+        // 冻完且待免疫系统激活
+        if (e.pendingImmune) {
+          e.frozenImmuneT = 5;
+          e.pendingImmune = false;
+          e.frozenAccum = 0;
+        }
+      }
+      // 被冻住时不移动、不攻击、亦无法接触伤害玩家
+      if (e.hitCd > 0) e.hitCd -= dt;
+      if (e.burnTime > 0) e.burnTime -= dt;
+      if (e.slowTime > 0) e.slowTime -= dt;
+      continue;
+    }
+    if (e.frozenImmuneT > 0) e.frozenImmuneT -= dt;
     const a = Math.atan2(p.y - e.y, p.x - e.x);
     const d2 = dist2(e.x, e.y, p.x, p.y);
     let spd = e.speed;
@@ -808,6 +919,22 @@ function update(dt) {
   }
   // ===== 紫火坑危险池（伤害玩家）=====
   for (const hz of G.hazards) {
+    if (hz.phase === 'tele') {
+      hz.teleT -= dt;
+      // 仅粒子上浮（弱化）
+      hz.sparkT -= dt;
+      if (hz.sparkT <= 0) {
+        hz.sparkT = 0.15;
+        G.particles.push({
+          x: hz.x + rand(-hz.r * 0.4, hz.r * 0.4),
+          y: hz.y + rand(-hz.r * 0.4, hz.r * 0.4),
+          vx: rand(-10, 10), vy: rand(-15, -5),
+          r: 2, color: '#c77dff', life: 0.6, maxLife: 0.6,
+        });
+      }
+      if (hz.teleT <= 0) { hz.phase = 'live'; hz.time = hz.maxTime; }
+      continue;
+    }
     hz.time -= dt;
     hz.tickT -= dt;
     hz.sparkT -= dt;

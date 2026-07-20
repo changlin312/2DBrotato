@@ -64,17 +64,26 @@ function render() {
 
   for (const pl of G.pools) {
     const a = clamp(pl.time / pl.maxTime, 0, 1);
-    ctx.globalAlpha = 0.35 * a;
-    ctx.fillStyle = '#ff7b00';
+    // 渐变中心高亮 → 边缘无淡
+    const g = ctx.createRadialGradient(pl.x, pl.y, 0, pl.x, pl.y, pl.r);
+    g.addColorStop(0, `rgba(255, 200, 80, ${0.5 * a})`);
+    g.addColorStop(0.4, `rgba(255, 130, 40, ${0.35 * a})`);
+    g.addColorStop(0.85, `rgba(180, 60, 10, ${0.15 * a})`);
+    g.addColorStop(1, 'rgba(120, 30, 0, 0)');
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(pl.x, pl.y, pl.r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 0.5 * a;
-    ctx.strokeStyle = '#ffd166';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(pl.x, pl.y, pl.r * (1 - 0.05 * Math.sin(performance.now() * 0.008)), 0, Math.PI * 2);
-    ctx.stroke();
+    // 不规则暗斑（火焰纹理）
+    for (let s = 0; s < 4; s++) {
+      const sa = s * 1.7 + pl.x * 0.013;
+      const sd = pl.r * (0.25 + 0.15 * Math.sin(s + pl.y * 0.01));
+      ctx.globalAlpha = 0.13 * a;
+      ctx.fillStyle = '#5a0e00';
+      ctx.beginPath();
+      ctx.arc(pl.x + Math.cos(sa) * sd, pl.y + Math.sin(sa) * sd, pl.r * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -174,6 +183,52 @@ function render() {
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.r * pulse + 2, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    if (e.mega) {
+      const pulse = 1 + 0.15 * Math.sin(performance.now() * 0.009 + e.y);
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = '#9d4edd';
+      ctx.lineWidth = 4;
+      ctx.setLineDash([10, 6]);
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r * pulse + 6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.65;
+      ctx.strokeStyle = '#ff6b35';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r * pulse + 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    if (e.frozenT > 0) {
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#aee3f0';
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#eaf4f4';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i++) {
+        const ja = i * Math.PI / 2 + Math.sin(performance.now() * 0.004 + i) * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(e.x, e.y);
+        ctx.lineTo(e.x + Math.cos(ja) * (e.r + 2), e.y + Math.sin(ja) * (e.r + 2));
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+    if (e.frozenImmuneT > 0) {
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = '#7be0c0';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
       ctx.globalAlpha = 1;
     }
 
@@ -331,23 +386,52 @@ function render() {
 
   // 紫火坑（boss 危险池）
   for (const hz of G.hazards) {
-    const a = clamp(hz.time / hz.maxTime, 0, 1);
-    ctx.globalAlpha = 0.45 * a;
-    const g = ctx.createRadialGradient(hz.x, hz.y, 4, hz.x, hz.y, hz.r);
-    g.addColorStop(0, '#c77dff');
-    g.addColorStop(0.6, '#7b2cbf');
-    g.addColorStop(1, 'rgba(123,44,191,0.1)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(hz.x, hz.y, hz.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 0.7 * a;
-    ctx.strokeStyle = '#c77dff';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(hz.x, hz.y, hz.r * (1 - 0.06 * Math.sin(performance.now() * 0.01)), 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    const isTele = hz.phase === 'tele';
+    if (isTele) {
+      const tA = 1 - hz.teleT / hz.teleMax;
+      ctx.globalAlpha = 0.3 + 0.3 * Math.sin(performance.now() * 0.025);
+      ctx.strokeStyle = '#c77dff';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 5]);
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.r + Math.sin(performance.now() * 0.02) * 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.15 + 0.2 * tA;
+      ctx.fillStyle = '#9d4edd';
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      const tc = hz.teleT >> 0;
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`+${tc}`, hz.x, hz.y + 4);
+      ctx.textAlign = 'left';
+    } else {
+      const a = clamp(hz.time / hz.maxTime, 0, 1);
+      const g = ctx.createRadialGradient(hz.x, hz.y, 0, hz.x, hz.y, hz.r);
+      g.addColorStop(0, `rgba(199,125,255,${0.5 * a})`);
+      g.addColorStop(0.5, `rgba(123,44,191,${0.35 * a})`);
+      g.addColorStop(0.85, `rgba(70,20,130,${0.15 * a})`);
+      g.addColorStop(1, 'rgba(40,10,80,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.r, 0, Math.PI * 2);
+      ctx.fill();
+      // 紫色不规则纹理
+      for (let s = 0; s < 4; s++) {
+        const sa = s * 1.9 + hz.x * 0.013;
+        const sd = hz.r * (0.25 + 0.15 * Math.sin(s + hz.y * 0.01));
+        ctx.globalAlpha = 0.13 * a;
+        ctx.fillStyle = '#3a0050';
+        ctx.beginPath();
+        ctx.arc(hz.x + Math.cos(sa) * sd, hz.y + Math.sin(sa) * sd, hz.r * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
   }
 
   // 激光预警 + 开火后的发光线
