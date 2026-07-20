@@ -122,17 +122,41 @@ function render() {
       }
     }
 
-    if (e.isBoss && e.def.ai === 'behemoth' && e.state === 'tele') {
+    if (e.isBoss && e.state === 'tele') {
       ctx.globalAlpha = 0.3 + 0.2 * Math.sin(performance.now() * 0.03);
-      ctx.strokeStyle = '#ffffff';
+      ctx.strokeStyle = '#ff4d4d';
       ctx.lineWidth = 4;
       ctx.setLineDash([8, 8]);
       ctx.beginPath();
       ctx.moveTo(e.x, e.y);
       ctx.lineTo(e.aimX, e.aimY);
       ctx.stroke();
+      // 在路径上画上"放射性"标示（垂直线交叉）
+      ctx.lineWidth = 2;
+      const perp = e.dashAngle + Math.PI / 2;
+      const sx = (e.x + e.aimX) / 2;
+      const sy = (e.y + e.aimY) / 2;
+      ctx.beginPath();
+      ctx.moveTo(sx + Math.cos(perp) * 30, sy + Math.sin(perp) * 30);
+      ctx.lineTo(sx - Math.cos(perp) * 30, sy - Math.sin(perp) * 30);
+      ctx.stroke();
       ctx.setLineDash([]);
       ctx.lineWidth = 1;
+      ctx.globalAlpha = 1;
+    }
+
+    // 冲撞中：在 boss 周围画 4 条放射粒子线
+    if (e.isBoss && e.state === 'dash') {
+      for (let k = 0; k < 4; k++) {
+        const aa = e.dashAngle + Math.PI / 2 + (k - 1.5) * 0.4;
+        ctx.globalAlpha = 0.3;
+        ctx.strokeStyle = '#ff4d4d';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(e.x, e.y);
+        ctx.lineTo(e.x + Math.cos(aa) * 70, e.y + Math.sin(aa) * 70);
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
     }
 
@@ -283,10 +307,72 @@ function render() {
     drawBullet(b);
   }
   for (const b of G.ebullets) {
-    ctx.fillStyle = '#ff4d4d';
+    if (b.beam) {
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(Math.atan2(b.vy, b.vx));
+      ctx.shadowColor = '#ff4d4d';
+      ctx.shadowBlur = 12;
+      const len = 26;
+      const grad = ctx.createLinearGradient(-len, 0, len, 0);
+      grad.addColorStop(0, 'rgba(255,77,77,0)');
+      grad.addColorStop(0.5, '#ff4d4d');
+      grad.addColorStop(1, '#fff5f5');
+      ctx.fillStyle = grad;
+      ctx.fillRect(-len, -3, len * 2, 6);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#ff4d4d';
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 紫火坑（boss 危险池）
+  for (const hz of G.hazards) {
+    const a = clamp(hz.time / hz.maxTime, 0, 1);
+    ctx.globalAlpha = 0.45 * a;
+    const g = ctx.createRadialGradient(hz.x, hz.y, 4, hz.x, hz.y, hz.r);
+    g.addColorStop(0, '#c77dff');
+    g.addColorStop(0.6, '#7b2cbf');
+    g.addColorStop(1, 'rgba(123,44,191,0.1)');
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
+    ctx.arc(hz.x, hz.y, hz.r, 0, Math.PI * 2);
     ctx.fill();
+    ctx.globalAlpha = 0.7 * a;
+    ctx.strokeStyle = '#c77dff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(hz.x, hz.y, hz.r * (1 - 0.06 * Math.sin(performance.now() * 0.01)), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // 激光预警 + 开火后的发光线
+  for (const lz of G.lasers) {
+    if (lz.warnT > 0) {
+      ctx.globalAlpha = 0.35 + 0.25 * Math.sin(performance.now() * 0.03);
+      ctx.strokeStyle = '#ff4d4d';
+      ctx.lineWidth = 4;
+      ctx.setLineDash([10, 6]);
+      ctx.beginPath();
+      ctx.moveTo(lz.x0, lz.y0);
+      ctx.lineTo(lz.x0 + Math.cos(lz.angle) * 900, lz.y0 + Math.sin(lz.angle) * 900);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    } else if (lz.fireT > 0) {
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = '#fff5f5';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(lz.x0, lz.y0);
+      ctx.lineTo(lz.x0 + Math.cos(lz.angle) * 900, lz.y0 + Math.sin(lz.angle) * 900);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
   }
 
   const pflash = p.hurtCd > 0 && Math.floor(p.hurtCd * 20) % 2 === 0;

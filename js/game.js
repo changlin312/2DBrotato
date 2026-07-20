@@ -23,6 +23,7 @@ document.getElementById('btn-menu').onclick = () => {
   G.enemies = []; G.bullets = []; G.ebullets = [];
   G.pickups = []; G.particles = []; G.texts = [];
   G.trails = []; G.rings = []; G.pools = []; G.lightnings = [];
+  G.hazards = []; G.lasers = [];
   G.boss = null;
 };
 
@@ -55,6 +56,8 @@ function startWave() {
   G.rings = [];
   G.pools = [];
   G.lightnings = [];
+  G.hazards = [];
+  G.lasers = [];
   G.shake = 0;
   G.boss = null;
   G.spawnTimer = 0.5;
@@ -147,9 +150,17 @@ function spawnBoss() {
     hp: BOSS_BASE_HP * hps, maxHp: BOSS_BASE_HP * hps,
     dmg: def.dmg * (1 + 0.05 * (G.wave - 1)),
     speed: def.speed,
-    hitCd: 0, aiT: 2.5, aimT: 1.2, warnT: 0.4,
-    state: 'move', stateT: 3, vx: 0, vy: 0,
+    hitCd: 0,
+    // 共用冲撞系统
+    state: 'move', stateT: 2.4, vx: 0, vy: 0,
+    chargeT: 4 + Math.random() * 2,
+    dashT: 0, dashAngle: 0, aimX: 0, aimY: 0,
+    // 各自专项
+    aiT: 3.0, aimT: 1.2, warnT: 0,
+    laserT: 8 + Math.random() * 2,
+    flameT: 6 + Math.random() * 2,
   };
+  if (def.ai === 'summoner') boss.aiT = 4.0;
   G.enemies.push(boss);
   G.boss = boss;
   SFX.bossSpawn();
@@ -159,32 +170,84 @@ function spawnBoss() {
   });
 }
 
+// 统一冲撞：telegraph 0.5s → 突进 0.6s → 恢复
+// 突进时沿垂直于冲撞方向每 0.1s 喷射放射性弹幕
+function bossChargeCommon(e, dt, p) {
+  if (e.state === 'move') {
+    e.chargeT -= dt;
+    if (e.chargeT <= 0) {
+      e.state = 'tele';
+      e.stateT = 0.5;
+      e.aimX = p.x; e.aimY = p.y;
+      const a = Math.atan2(p.y - e.y, p.x - e.x);
+      e.dashAngle = a;
+    }
+  } else if (e.state === 'tele') {
+    e.flash = 0.08;
+    e.stateT -= dt;
+    if (e.stateT <= 0) {
+      e.state = 'dash';
+      e.stateT = 0.6;
+      const sp = e.speed * 7;
+      e.vx = Math.cos(e.dashAngle) * sp;
+      e.vy = Math.sin(e.dashAngle) * sp;
+      e.dashT = 0;
+    }
+  } else if (e.state === 'dash') {
+    e.stateT -= dt;
+    e.x += e.vx * dt;
+    e.y += e.vy * dt;
+    e.dashT -= dt;
+    if (e.dashT <= 0) {
+      // 沿垂直方向放射性弹幕（4 颗扇开）
+      const perp = e.dashAngle + Math.PI / 2;
+      for (let i = -1; i <= 1; i++) {
+        const aa = perp + i * 0.35;
+        G.ebullets.push({ x: e.x, y: e.y, vx: Math.cos(aa) * 200, vy: Math.sin(aa) * 200, dmg: e.dmg * 0.8, life: 2 });
+      }
+      // 沿冲撞轨迹抛撒火力点
+      G.ebullets.push({
+        x: e.x, y: e.y,
+        vx: -Math.cos(e.dashAngle) * 60, vy: -Math.sin(e.dashAngle) * 60,
+        dmg: e.dmg * 0.6, life: 1.5,
+      });
+      e.dashT = 0.08;
+    }
+    if (e.stateT <= 0) {
+      e.state = 'move';
+      e.stateT = 2.4;
+      e.chargeT = 4 + Math.random() * 2;
+      e.vx = 0; e.vy = 0;
+    }
+  }
+}
+
 function updateBoss(e, dt, p) {
   const a = Math.atan2(p.y - e.y, p.x - e.x);
   const d = Math.hypot(p.x - e.x, p.y - e.y);
 
+  // ===== 共用冲撞 =====
+  bossChargeCommon(e, dt, p);
+  // 非冲撞阶段才执行专项行动
+  if (e.state !== 'move') {
+    e.x = clamp(e.x, e.r, W - e.r);
+    e.y = clamp(e.y, e.r, H - e.r);
+    return;
+  }
+
+  // ===== 各 Boss 日常行为（仅在 move 状态触发）=====
   if (e.def.ai === 'behemoth') {
     e.stateT -= dt;
-    if (e.state === 'move') {
-      e.x += Math.cos(a) * e.speed * dt;
-      e.y += Math.sin(a) * e.speed * dt;
-      if (e.stateT <= 0) { e.state = 'tele'; e.stateT = 0.6; e.aimX = p.x; e.aimY = p.y; }
-    } else if (e.state === 'tele') {
-      e.flash = 0.05;
-      e.vx = Math.cos(a) * e.speed * 7;
-      e.vy = Math.sin(a) * e.speed * 7;
-      if (e.stateT <= 0) { e.state = 'dash'; e.stateT = 0.7; }
-    } else {
-      e.x += e.vx * dt;
-      e.y += e.vy * dt;
-      if (e.stateT <= 0) { e.state = 'move'; e.stateT = 3; }
-    }
+    e.x += Math.cos(a) * e.speed * dt;
+    e.y += Math.sin(a) * e.speed * dt;
+    if (e.stateT <= 0) e.stateT = 2.4;
   } else if (e.def.ai === 'summoner') {
     if (d > 280) { e.x += Math.cos(a) * e.speed * dt; e.y += Math.sin(a) * e.speed * dt; }
     else if (d < 180) { e.x -= Math.cos(a) * e.speed * dt; e.y -= Math.sin(a) * e.speed * dt; }
+    // 召唤 minions
     e.aiT -= dt;
     if (e.aiT <= 0) {
-      e.aiT = 3.2;
+      e.aiT = 4.2;
       e.flash = 0.15;
       const pool = ['zombie', 'bat', 'shooter'];
       for (let i = 0; i < 3; i++) {
@@ -196,8 +259,7 @@ function updateBoss(e, dt, p) {
           x: clamp(e.x + Math.cos(sa) * 60, 10, W - 10),
           y: clamp(e.y + Math.sin(sa) * 60, 10, H - 10),
           r: def.r, def, id: mid,
-          hp: def.hp * hps,
-          maxHp: def.hp * hps,
+          hp: def.hp * hps, maxHp: def.hp * hps,
           dmg: def.dmg * (1 + 0.05 * (G.wave - 1)),
           speed: def.speed * rand(0.9, 1.1),
           hitCd: 0, shootCd: rand(1, 2.5),
@@ -205,49 +267,64 @@ function updateBoss(e, dt, p) {
       }
       boom(e.x, e.y, '#e8b04b', 12);
     }
+    // 紫火喷吐：每隔 6-8 秒在玩家附近落 4 个紫火坑
+    e.flameT -= dt;
+    if (e.flameT <= 0) {
+      e.flameT = 7 + Math.random() * 2;
+      e.flash = 0.2;
+      for (let i = 0; i < 4; i++) {
+        const tx = clamp(p.x + rand(-90, 90), 30, W - 30);
+        const ty = clamp(p.y + rand(-90, 90), 30, H - 30);
+        spawnHazard(tx, ty, 32, 3.5, e.dmg * 0.7);
+      }
+      SFX.explosion();
+      boom(e.x, e.y, '#9d4edd', 16);
+    }
   } else if (e.def.ai === 'bulletlord') {
     e.x += Math.cos(a) * e.speed * dt;
     e.y += Math.sin(a) * e.speed * dt;
+    // 环弹
     e.aiT -= dt;
-    e.aimT -= dt;
     e.warnT -= dt;
     if (e.aiT <= 0) {
-      e.aiT = 2.6;
-      e.warnT = 0.35;
-      e.warnRings = 3;
+      e.aiT = 2.2;
+      e.warnT = 0.5;
+      e.warnRings = 2;
       e.warnX = e.x; e.warnY = e.y;
     }
     if (e.warnT <= 0 && e.warnRings > 0) {
       e.warnRings--;
-      e.warnT = 0.35;
+      e.warnT = 0.5;
     }
-    if (e.warnRings <= 0 && e.warnT === 0.35) {
+    if (e.warnRings <= 0 && e.warnT === 0.5) {
       e.flash = 0.15;
       e.warnT = -1;
       const n = 16;
       for (let i = 0; i < n; i++) {
         const ba = (i / n) * Math.PI * 2;
-        G.ebullets.push({ x: e.x, y: e.y, vx: Math.cos(ba) * 170, vy: Math.sin(ba) * 170, dmg: e.dmg, life: 4 });
+        G.ebullets.push({ x: e.x, y: e.y, vx: Math.cos(ba) * 180, vy: Math.sin(ba) * 180, dmg: e.dmg, life: 4 });
       }
     }
-    if (e.aimT <= 0) {
-      e.aimT = 1.3;
-      e.aimWarn = 0.3;
-      e.aimWarnRings = 1;
-    }
-    if (e.aimWarn > 0) {
-      e.aimWarn -= dt;
-      if (e.aimWarn <= 0) {
-        for (let i = -1; i <= 1; i++) {
-          const ba = a + i * 0.18;
-          G.ebullets.push({ x: e.x, y: e.y, vx: Math.cos(ba) * 260, vy: Math.sin(ba) * 260, dmg: e.dmg, life: 3 });
-        }
-      }
+    // 激光：朝玩家方向约 8-10 秒一次，0.5s 预警光束
+    e.laserT -= dt;
+    if (e.laserT <= 0) {
+      e.laserT = 9 + Math.random() * 2;
+      const ang = Math.atan2(p.y - e.y, p.x - e.x);
+      spawnLaser(e.x, e.y, ang, 0.5, 0.7, e.dmg);
     }
   }
 
   e.x = clamp(e.x, e.r, W - e.r);
   e.y = clamp(e.y, e.r, H - e.r);
+}
+
+function spawnHazard(x, y, r, time, dps) {
+  G.hazards.push({ x, y, r, time, maxTime: time, dps, tickT: 0, sparkT: 0 });
+}
+
+function spawnLaser(x, y, angle, warnTime, fireTime, dmg) {
+  // 预警 → 期间沿 angle 方向持续推进 7 颗高速子弹
+  G.lasers.push({ x, y, angle, warnT: warnTime, fireT: fireTime, tick: 0, dmg, x0: x, y0: y });
 }
 
 function boom(x, y, color, n, size) {
@@ -418,6 +495,7 @@ function explode(x, y, radius, dmg) {
   SFX.explosion();
   G.shake = Math.max(G.shake, 0.2);
   G.rings.push({ x, y, r: 10, maxR: radius, life: 0.35, maxLife: 0.35 });
+  // 主体散射火焰粒子（24 颗）
   for (let i = 0; i < 24; i++) {
     const a = rand(0, Math.PI * 2), s = rand(60, 320);
     G.particles.push({
@@ -426,6 +504,7 @@ function explode(x, y, radius, dmg) {
       life: rand(0.25, 0.6), maxLife: 0.6,
     });
   }
+  // 烟灰上浮
   for (let i = 0; i < 8; i++) {
     const a = rand(0, Math.PI * 2), s = rand(20, 70);
     G.particles.push({
@@ -433,9 +512,31 @@ function explode(x, y, radius, dmg) {
       r: rand(4, 8), color: '#555', life: rand(0.4, 0.8), maxLife: 0.8,
     });
   }
+  // 放射状 8 道火焰长尾（每道 5 颗串联）
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + rand(-0.1, 0.1);
+    for (let k = 0; k < 5; k++) {
+      const s = 140 + k * 40 + rand(-20, 20);
+      G.particles.push({
+        x: x + Math.cos(a) * k * 4, y: y + Math.sin(a) * k * 4,
+        vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+        r: 3 + (4 - k) * 0.8, color: ['#ff9f1c', '#e63946', '#ffb703'][k % 3],
+        life: 0.3 + k * 0.05, maxLife: 0.55,
+      });
+    }
+  }
   for (const e of G.enemies) {
     if (!e.dead && dist2(x, y, e.x, e.y) < radius * radius) damageEnemy(e, dmg);
   }
+}
+
+function spawnInfernoPool(x, y, radius, dmg) {
+  // 玩家持有 inferno 道具时，火箭爆炸留下燃烧池
+  const n = G.player.items.inferno || 0;
+  if (n <= 0) return;
+  const time = 2 + 0.4 * n;
+  const dps = dmg * 0.4;
+  spawnPool(x, y, radius, time, dps);
 }
 
 function strikeChain(source, b) {
@@ -533,7 +634,7 @@ function update(dt) {
       });
     }
     if (b.traveled > b.range || b.x < -30 || b.x > W + 30 || b.y < -30 || b.y > H + 30) {
-      if (b.wid === 'rocket') explode(b.x, b.y, b.aoe, b.dmg);
+      if (b.wid === 'rocket') { explode(b.x, b.y, b.aoe, b.dmg); spawnInfernoPool(b.x, b.y, b.aoe, b.dmg); }
       else if (b.wid === 'molotov') spawnPool(b.x, b.y, b.poolR, b.poolTime, b.dmg * 0.5);
       b.dead = true; continue;
     }
@@ -542,6 +643,7 @@ function update(dt) {
       if (dist2(b.x, b.y, e.x, e.y) < (e.r + b.br) * (e.r + b.br)) {
         if (b.wid === 'rocket') {
           explode(b.x, b.y, b.aoe, b.dmg);
+          spawnInfernoPool(b.x, b.y, b.aoe, b.dmg);
           b.dead = true;
         } else if (b.wid === 'molotov') {
           spawnPool(b.x, b.y, b.poolR, b.poolTime, b.dmg * 0.5);
@@ -704,6 +806,56 @@ function update(dt) {
     }
     if (pl.time <= 0) pl.dead = true;
   }
+  // ===== 紫火坑危险池（伤害玩家）=====
+  for (const hz of G.hazards) {
+    hz.time -= dt;
+    hz.tickT -= dt;
+    hz.sparkT -= dt;
+    if (hz.sparkT <= 0) {
+      hz.sparkT = 0.06;
+      G.particles.push({
+        x: hz.x + rand(-hz.r, hz.r), y: hz.y + rand(-hz.r, hz.r),
+        vx: rand(-25, 25), vy: rand(-50, -20),
+        r: rand(2, 4), color: Math.random() < 0.5 ? '#9d4edd' : '#c77dff',
+        life: 0.4, maxLife: 0.4,
+      });
+    }
+    if (hz.tickT <= 0) {
+      hz.tickT = 0.2;
+      if (!G.player.dead && dist2(hz.x, hz.y, G.player.x, G.player.y) < hz.r * hz.r) {
+        hurtPlayer(hz.dps * 0.2, true);
+      }
+    }
+    if (hz.time <= 0) hz.dead = true;
+  }
+  // ===== 预警激光发射 =====
+  for (const lz of G.lasers) {
+    if (lz.warnT > 0) {
+      lz.warnT -= dt;
+      if (lz.warnT <= 0) {
+        // 开始发射：每 0.04s 朝 angle 方向刷出一颗高速大型子弹
+        lz.tick = 0;
+        SFX.laserHit();
+      }
+    } else if (lz.fireT > 0) {
+      lz.fireT -= dt;
+      lz.tick -= dt;
+      if (lz.tick <= 0) {
+        lz.tick = 0.04;
+        // 同时沿 angle 方向略带散布喷射 5 颗高速弹，模拟"光束流"
+        for (let i = -2; i <= 2; i++) {
+          const off = i * 0.02;
+          const ba = lz.angle + off;
+          G.ebullets.push({
+            x: lz.x0, y: lz.y0,
+            vx: Math.cos(ba) * 900, vy: Math.sin(ba) * 900,
+            dmg: lz.dmg * 0.5, life: 0.6, beam: true,
+          });
+        }
+      }
+      if (lz.fireT <= 0) lz.dead = true;
+    }
+  }
   if (G.shake > 0) G.shake -= dt;
 
   G.enemies = G.enemies.filter(e => !e.dead);
@@ -716,14 +868,17 @@ function update(dt) {
   G.rings = G.rings.filter(rg => !rg.dead);
   G.lightnings = G.lightnings.filter(lt => !lt.dead);
   G.pools = G.pools.filter(pl => !pl.dead);
+  G.hazards = G.hazards.filter(hz => !hz.dead);
+  G.lasers = G.lasers.filter(lz => !lz.dead);
 }
 
-function hurtPlayer(dmg) {
+function hurtPlayer(dmg, noShake) {
   const p = G.player;
+  if (!p || p.dead) return;
   const real = Math.max(1, dmg - p.armor);
   p.hp -= real;
   p.hurtCd = 0.4;
-  G.shake = 0.25;
+  if (!noShake) G.shake = 0.25;
   SFX.playerHit();
   G.texts.push({
     x: p.x, y: p.y - p.r - 8,

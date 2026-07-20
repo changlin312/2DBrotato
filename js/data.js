@@ -31,6 +31,8 @@ const G = {
   speedMul: 1,
   pools: [],
   lightnings: [],
+  hazards: [],
+  lasers: [],
 };
 
 const WEAPONS = {
@@ -55,6 +57,7 @@ const ITEMS = {
   dumbbell: { name: '哑铃',     price: 28, desc: '所有伤害 +15%',        apply: p => p.dmgMult += 0.15 },
   leaf:     { name: '再生叶',   price: 30, desc: '每秒回复 0.6 生命',    apply: p => p.regen += 0.6 },
   tree:     { name: '摇钱树',   price: 25, desc: '每波结束额外获得 波数×10 金币（每持有一棵 +5）', apply: p => {} },
+  inferno:  { name: '燃烧火箭', price: 50, desc: '强化火箭筒：爆炸留下燃烧池（半径=爆炸范围，伤害=火箭伤害40%）', apply: p => {} },
 };
 
 const ENEMY_TYPES = {
@@ -115,12 +118,12 @@ function itemPrice(id) {
 function enemyHpScale(wave) {
   let v = 1.0;
   for (let w = 2; w <= wave; w++) {
-    if (w === 11) { v *= 2; continue; }
+    if (w === 11) { v *= 3; continue; }
     if (w === 21) { v *= 3; continue; }
     let g;
     if (w <= 10) g = 0.15;
-    else if (w <= 25) g = 0.28;
-    else g = Math.max(0.12, 0.28 - (w - 26) * 0.04);
+    else if (w <= 25) g = 0.30;
+    else g = Math.max(0.10, 0.20 - (w - 26) * 0.04);
     v *= 1 + g;
   }
   return v * Math.pow(1.5, G.bossKilled);
@@ -128,13 +131,9 @@ function enemyHpScale(wave) {
 
 function bossHpScale(wave) {
   const base = enemyHpScale(wave);
-  // 平衡目标（基于实际存档数据 run0）：
-  //   wave 10 Boss kill ≈ 30 秒，DPS ~ 0.5K；multip=1
-  //   wave 20 Boss kill ≈ 20-30 秒，DPS ~ 100K；multip=22 (使 HP 达 3M)
-  //   wave 30 Boss kill ≈ 60-90 秒，DPS ~ 300K；multip=38 (使 HP 达 18M)
-  // 由此保持 wave10 < boss20 < boss30，强度递增且不失控。
-  if (wave === 20) return base * 22;
-  if (wave === 30) return base * 38;
+  if (wave === 10) return base * 2;
+  if (wave === 20) return base * 15;
+  if (wave === 30) return base * 30;
   return base;
 }
 
