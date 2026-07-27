@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>2DBrotato · 版本演变与数值设计</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: radial-gradient(circle at 50% 15%, rgba(200,140,60,0.08), transparent 55%),
+      repeating-linear-gradient(45deg, rgba(232,176,75,0.02) 0 2px, transparent 2px 10px),
+      #131009;
+    color:#e8dcc4; font-family:"Microsoft YaHei","PingFang SC",sans-serif;
+    padding:24px; line-height:1.6;
+  }
+  h1 { color:#e8b04b; font-family:"STKaiti","KaiTi",serif; letter-spacing:8px;
+    text-shadow:0 0 12px rgba(232,176,75,0.35); margin-bottom:4px; font-size:30px; }
+  h2 { color:#e8b04b; font-family:"STKaiti","KaiTi",serif; letter-spacing:4px;
+    margin:24px 0 10px; padding-bottom:8px; border-bottom:1px solid #5a4a2a; }
+  h3 { color:#c9a227; margin:18px 0 6px; letter-spacing:2px; }
+  .sub { color:#8a7f68; font-size:13px; letter-spacing:2px; margin-bottom:22px; }
+  .grid { max-width:1100px; margin:0 auto; }
+  .panel { background:#1d1810; border:1px solid #5a4a2a; border-radius:4px; padding:16px; margin:12px 0; }
+  .panel::after { content:''; display:block; }
+  table { width:100%; border-collapse:collapse; margin:8px 0; font-size:13px; }
+  th,td { padding:7px 10px; text-align:center; border-bottom:1px solid #3a2e17; }
+  th { color:#c9a227; background:#171209; }
+  tr:hover td { background:#221a10; }
+  .hl-up { color:#57cc99; }
+  .hl-down { color:#ff5d5d; }
+  .hl-new { color:#e8b04b; font-weight:bold; }
+  .commit { display:flex; gap:12px; align-items:flex-start; padding:10px 0;
+    border-bottom:1px dashed #3a2e17; }
+  .commit .hash { font-family:monospace; color:#c9a227; font-size:12px;
+    background:#22180c; padding:2px 6px; border-radius:3px; min-width:78px; text-align:center; }
+  .commit .msg { flex:1; }
+  .commit .msg .title { color:#e8dcc4; font-weight:bold; }
+  .commit .msg .meta { color:#8a7f68; font-size:11px; margin-top:3px; }
+  .charts-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .chart-card { background:#1d1810; border:1px solid #5a4a2a; border-radius:4px; padding:12px; }
+  .chart-card canvas { width:100% !important; height:260px !important; }
+  .formula { background:#171209; border-left:3px solid #c9a227; padding:10px 14px;
+    font-family:monospace; font-size:13px; color:#a89880; margin:8px 0; white-space:pre-wrap; }
+  .tag { display:inline-block; background:#2e2418; border:1px solid #4a4133;
+    border-radius:3px; padding:2px 8px; font-size:12px; color:#cbb9a0; margin:2px; }
+  .tag.ver { background:#5a4a2a; color:#f5e6c8; border-color:#8a6d2b; }
+  .stat { display:inline-block; background:#211a12; border:1px solid #4a4133;
+    border-radius:3px; padding:6px 14px; margin:4px; min-width:120px; }
+  .stat .num { font-size:22px; font-weight:bold; color:#e8b04b; }
+  .stat .label { font-size:12px; color:#a89880; }
+  .stats-row { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+  .note { color:#a89880; font-size:13px; font-style:italic; margin-top:8px; }
+  .accent { color:#57cc99; }
+</style>
+</head>
+<body>
+<div class="grid">
+<h1>墨甲行者 · 版本演变与数值设计</h1>
+<div class="sub">2DBROTATO · DESIGN ARC · CRAFTED FROM LIVE COMMIT LOG &amp; FORMULAE</div>
+
+<h2>一、版本演变</h2>
+<div class="panel">
+  <div id="commits"></div>
+</div>
+
+<h2>二、核心数值公式</h2>
+<div class="panel">
+<h3>敌人 HP 缩放 — enemyHpScale(wave)</h3>
+<div class="formula">v = 1
+for w in 2..wave:
+  if w == 11: v *= 3; continue      # 第11波跳×3
+  if w == 21: v *= 3; continue      # 第21波跳×3
+  if w <= 10: g = 0.15              # 早期温和
+  elif w <= 25: g = 0.30            # 中段高增长
+  else: g = max(0.10, 0.20 - (w-26)*0.04)   # 末段减速到10%
+  v *= 1 + g
+return v * 1.5^bossKilled           # 击破Boss后全局×1.5</div>
+<p class="note">设计思路：分段增长率，让早期玩家熟悉 / 中段紧张 / 末段不爆炸。bossKilled 的 1.5× 给通过 boss 的隐性奖励。</p>
+
+<h3>Boss HP 缩放 — bossHpScale(wave)</h3>
+<div class="formula">base = enemyHpScale(wave)
+if wave == 10: base × 2
+if wave == 20: base × 15       (×1.5 bossKilled)
+if wave == 30: base × 30 ÷ 2   (双 Boss 各半)</div>
+<p class="note">设计思路：第 10 波 boss 较弱让玩家尝 boss 战；第 20 波是中段硬关 (×15 配合 ×1.5)；第 30 波双 Boss 加强但单一血量减半，"压力共享但难复制"。</p>
+
+<h3>敌人伤害缩放</h3>
+<div class="formula">def.dmg × (1 + 0.05 × (wave - 1))    # 每波+5%线性</div>
+
+<h3>玩家武器成长</h3>
+<div class="formula">伤害 = base_dmg × 1.5^(tier-1) × dmgMult
+冷却 = base_cd × 0.9^(tier-1) / atkSpd    # atkSpd cap 2.0
+射程 = base_range + (tier-1) × 20</div>
+<p class="note">武器伤害按 <span class="accent">1.5^tier</span> 指数增长，与敌人的 (1+g)^wave 增长呈竞速关系 — 玩家推阶快则秒杀，慢则卡壳。</p>
+
+<h3>金币奖励</h3>
+<div class="formula">击杀金币 = max(1, round(def.gold × (1 + 0.25×(wave-1))))
+波次通关奖金 = 8 + wave × 2
+摇钱树年金 = wave × (10 + 5×(N-1))    N = 持有摇钱树数量</div>
+<p class="note">击杀金线性放大（不是指数），避免与道具叠加后失控；摇钱树线性，相对幸运草的乘法已被废弃。</p>
+</div>
+
+<h2>三、预期成长曲线</h2>
+<div class="panel">
+<div class="stats-row">
+<div class="stat"><div class="num">30</div><div class="label">总波数</div></div>
+<div class="stat"><div class="num">6</div><div class="label">武器槽</div></div>
+<div class="stat"><div class="num">10</div><div class="label">武器种类</div></div>
+<div class="stat"><div class="num">10</div><div class="label">敌人种类</div></div>
+<div class="stat"><div class="num">3</div><div class="label">Boss 种类</div></div>
+<div class="stat"><div class="num">9</div><div class="label">道具种类</div></div>
+</div>
+
+<div class="charts-row">
+  <div class="chart-card"><h3>敌人 HP 倍数 × （含 bossKilled 累积）</h3><canvas id="cEnemy"></canvas></div>
+  <div class="chart-card"><h3>Boss HP 绝对值</h3><canvas id="cBoss"></canvas></div>
+  <div class="chart-card"><h3>玩家武器 DPS 成长（主导武器为例）</h3><canvas id="cDPS"></canvas></div>
+  <div class="chart-card"><h3>金币收入累积（0 道具 vs 1 摇钱树）</h3><canvas id="cGold"></canvas></div>
+  <div class="chart-card"><h3>玩家 HP / 护甲 （无道具基准）</h3><canvas id="cHP"></canvas></div>
+  <div class="chart-card"><h3>击杀时间预期 vs 击杀时间实测（参考）</h3><canvas id="cKillT"></canvas></div>
+</div>
+<p class="note">所有曲线基于 0 道具基准 + 4 次 boss 击杀累积 1.5×2.25 推演。</p>
+</div>
+
+<h2>四、版本变动概览</h2>
+<div class="panel">
+<h3>初始版本 (240d14d)</h3>
+<p>单 HTML + Canvas，6 武器 8 道具 4 敌人 3 Boss。30 秒波次 + 商店。基础数值公式（含道具惩罚 0.005×itemsBought）。</p>
+<span class="tag hl-new">新游戏</span>
+<span class="tag">handcrafted city</span>
+
+<h3>v2 时间流速 + 新敌人 + 武器合成 (42eab01)</h3>
+<p>新增时间流速按钮 (1×/2×/4×/8×)，固定时步子步循环。4 个新敌人（粘液/蜘蛛/自爆虫/守卫者/暴徒/猎手）+ 4 把新武器（火焰/冰冻/闪电雷/燃烧瓶）。武器 6 槽可分配 + 同名合成。</p>
+<span class="tag hl-new">+10 敌人</span>
+<span class="tag hl-new">+4 武器</span>
+<span class="tag hl-new">+时间流速</span>
+<span class="tag hl-new">+武器合成</span>
+
+<h3>v3 移除道具惩罚 + 武器槽可交互 (f40c417)</h3>
+<p>移除 <span class="hl-down">道具惩罚 0.005×itemsBought</span>，鼓励玩家买道具。波数 25 后增长率递减到 0.05。新增武器槽交互区：合成按钮 + 出售按钮（返还 80%）。</p>
+<span class="tag hl-down">-道具惩罚</span>
+<span class="tag hl-up">+武器槽交互</span>
+
+<h3>v4 bossHpScale 重做 (58e70b6)</h3>
+<p>导出 run[0] 通关数据后：Boss 10 12.6K（29.6s）/ Boss 20 668K（6.6s 秒杀）/ Boss 30 398M（134s）。系数从 <span class="hl-down">×5/×1.1</span> 改为 <span class="hl-up">×1/×22/×38</span>，修复 boss20 太弱 boss30 失控。</p>
+<span class="tag hl-up">基于实测调参</span>
+
+<h3>v5 中式像素科幻全面美术重做 (83d2a5c)</h3>
+<p>14 套像素贴图（墨甲行者 + 10 敌 + 3 Boss）。墨色星野背景。Web Audio 五声音阶音效（锣鼓铃笛）。UI 朱红鎏金双框。</p>
+<span class="tag hl-new">+美术 overhaul</span>
+<span class="tag hl-new">+音频 overhaul</span>
+
+<h3>v6 第 10 波后增长率上调 (ee42a0f)</h3>
+<p>导出 run[5] 后：第 15 起 avgKillTime=2.7 秒秒杀。11 波跳跃 ×2→<span class="hl-up">×3</span>，12-25 波 g 从 15%→<span class="hl-up">28%</span>。</p>
+<span class="tag hl-up">+增长率</span>
+
+<h3>v7 摇钱树替代幸运草 (53f6aba)</h3>
+<p>幸运草 24棵 + goldMult=5.8 → 终金 104K，是正常局 36 倍。<span class="hl-down">移除 clover</span> + <span class="hl-up">新增 tree 摇钱树</span>（线性收入）。</p>
+<span class="tag hl-down">-幸运草</span>
+<span class="tag hl-up">+摇钱树</span>
+
+<h3>v8 boss 攻击性 + 火箭强化 + 平衡再调 (323c1ca)</h3>
+<p>全 Boss 共用冲撞 + 弹幕领主激光 + 召唤者紫火坑。<span class="hl-new">11 波跳跃 ×2→×3</span>、12-25 g 0.28→<span class="hl-up">0.30</span>，第 20 后衰减慢。Boss10 ×1→<span class="hl-up">×2</span> 翻倍血量。火箭燃烧池道具。</p>
+<span class="tag hl-new">+boss 攻击性</span>
+<span class="tag hl-new">+燃烧火箭</span>
+
+<h3>v9 双 Boss + mega 精英 + 燃烧池预警 (c6e9e80)</h3>
+<p>第 30 波 <span class="hl-up">双 Boss</span>（血量各半）。第 21 波后 boss 增强 (aggressive)。<span class="hl-new">mega 精英</span> (×7.5 血量)。紫火坑 <span class="hl-up">2s 预警</span>。冰冻弹 AOE+抗冻免疫。火坑去描边+纹理。</p>
+<span class="tag hl-new">+双Boss</span>
+<span class="tag hl-new">+mega精英</span>
+<span class="tag hl-new">+火焰坑预警</span>
+<span class="tag hl-new">+冰冻免疫</span>
+</div>
+
+<h2>五、当前数值对比 — Boss HP 缩放历史</h2>
+<div class="panel">
+<table>
+<tr><th>版本</th><th>公式</th><th>Boss 10 HP</th><th>Boss 20 HP</th><th>Boss 30 HP</th></tr>
+<tr><td>v1 初始</td><td>×30^(w/10)</td><td>25,500</td><td>765,000</td><td>22,950,000</td></tr>
+<tr><td>v4 重做</td><td>×1/×22/×38</td><td>12,664</td><td>668K</td><td>40.9M → <span class="hl-up">134s 实测</span></td></tr>
+<tr><td>v6 调参</td><td>×5/×1.1</td><td>12,664</td><td><span class="hl-down">668K</span>(<span class="hl-new">0.1s 秒杀</span>)</td><td>1.55M (× 2.25)</td></tr>
+<tr><td>v8 调整</td><td>×2/×15/×30</td><td><span class="hl-up">25,329</span></td><td>9.06M (<span class="hl-up">88s 期望</span>)</td><td>1.32B</td></tr>
+<tr><td>v9 双 Boss</td><td>×2/×15/×30/2</td><td>25,329</td><td>9.06M</td><td><span class="hl-new">659M ×2</span></td></tr>
+</table>
+<p class="note">注：v6/v8 调参目标随实际通关数据迭代。</p>
+</div>
+
+</div>
+<script>
+const commits = [
+  {h:'c6e9e80', t:'feat: 第30波双Boss、增强火箭、冰冻冻结免疫、火焰坑预警、新mega精英、强化boss攻击', d:'2026-07-20 20:13'},
+  {h:'323c1ca', t:'feat+balance: boss 攻击性强化、火箭强化(燃烧池+放射粒子)、平衡调整', d:'2026-07-20 11:47'},
+  {h:'53f6aba', t:'balance: 用摇钱树替代幸运草，移除金币倍率乘法', d:'2026-07-20 01:06'},
+  {h:'ee42a0f', t:'balance: 第10波后敌人增长率全面上调（基于最新通关数据分析）', d:'2026-07-19 23:45'},
+  {h:'83d2a5c', t:'art: 中式像素科幻全面视觉听觉重做', d:'2026-07-19 22:24'},
+  {h:'58e70b6', t:'balance: 重做 bossHpScale 系数 based on real-play dashboard data', d:'2026-07-19 21:24'},
+  {h:'f40c417', t:'balance+ui: 移除道具惩罚、第25波后减缓增长、武器槽可合成/出售', d:'2026-07-19 21:11'},
+  {h:'42eab01', t:'feat: 时间流速档位/新敌人/新武器/武器合成系统/设计文档', d:'2026-07-19 20:47'},
+  {h:'240d14d', t:'Initial commit: 2DBrotato top-down survivor shooter', d:'2026-07-19 19:50'},
+];
+document.getElementById('commits').innerHTML = commits.map(c =>
+  `<div class="commit"><span class="hash">${c.h}</span>
+   <div class="msg"><div class="title">${c.t}</div><div class="meta">${c.d}</div></div></div>`
+).join('');
+
+// 数值曲线计算
+function ehp(w, bk) {
+  let v = 1;
+  for (let i = 2; i <= w; i++) {
+    if (i === 11 || i === 21) { v *= 3; continue; }
+    let g;
+    if (i <= 10) g = 0.15;
+    else if (i <= 25) g = 0.30;
+    else g = Math.max(0.10, 0.20 - (i - 26) * 0.04);
+    v *= 1 + g;
+  }
+  return v * Math.pow(1.5, bk);
+}
+function bk(w) { return w >= 21 ? 2 : w >= 11 ? 1 : 0; }
+function bossHP(w) {
+  if (w === 10) return ehp(w, 0) * 2 * 3600;
+  if (w === 20) return ehp(w, 1) * 15 * 3600;
+  if (w === 30) return ehp(w, 2) * 30 * 3600 / 2;
+  return 0;
+}
+const waves = []; for (let w = 1; w <= 30; w++) waves.push(w);
+
+// 1. enemy HP curves
+const enemyScale = waves.map(w => ehp(w, bk(w)));
+new Chart(document.getElementById('cEnemy'), {
+  type: 'line',
+  data: { labels: waves, datasets: [
+    { label: '0 bossKilled', data: waves.map(w=>ehp(w,0)), borderColor:'#7a9b2e', tension:0.2 },
+    { label: '累积 bossKilled', data: enemyScale, borderColor:'#e63946', backgroundColor:'rgba(230,57,70,0.15)', tension:0.2, fill:true },
+  ]},
+  options: { responsive:false, scales:{y:{type:'logarithmic'}} }
+});
+
+// 2. boss HP
+new Chart(document.getElementById('cBoss'), {
+  type: 'bar',
+  data: { labels: ['10波 Boss', '20波 Boss', '30波 ×2各半'],
+    datasets: [{ label:'Boss HP', data:[bossHP(10),bossHP(20),bossHP(30)],
+      backgroundColor:['#a32026','#8a6a3a','#9d4edd'] }] },
+  options:{responsive:false,scales:{y:{type:'logarithmic'}}}
+});
+
+// 3. DPS growth (示 sniper 与 flame 为例)
+function wDps(wid, tier) {
+  const base = {pistol:8, smg:4, shotgun:5, sniper:32, laser:12, rocket:26, flame:3, frost:16, chain:22, molotov:30}[wid];
+  const cd = {pistol:0.75,smg:0.14,shotgun:1.25,sniper:2.0,laser:0.5,rocket:1.8,flame:0.06,frost:0.55,chain:0.7,molotov:1.4}[wid];
+  return base * Math.pow(1.5, tier-1) / (cd * Math.pow(0.9, tier-1));
+}
+const tiers = []; for (let t = 1; t <= 30; t++) tiers.push('T'+t);
+new Chart(document.getElementById('cDPS'), {
+  type:'line',
+  data:{labels:tiers, datasets:[
+    {label:'sniper', data: tiers.map((_,i)=>wDps('sniper', i+1)), borderColor:'#ffe066', tension:0.2 },
+    {label:'flame', data: tiers.map((_,i)=>wDps('flame', i+1)), borderColor:'#ff6b35', tension:0.2 },
+    {label:'smg', data: tiers.map((_,i)=>wDps('smg', i+1)), borderColor:'#ffd166', tension:0.2 },
+  ]},
+  options:{responsive:false, scales:{y:{type:'logarithmic'}}}
+});
+
+// 4. gold income cumulative
+function goldCumWave(w, trees) {
+  let g = 25;
+  for (let i = 1; i <= w; i++) {
+    g += 8 + i * 2;
+    if (i % 10 === 0) g += 60 * (1 + 0.25 * (i - 1));
+    else g += Math.round(30 * (1 + 0.25 * (i - 1)));
+    if (trees > 0) g += i * (10 + 5 * (trees - 1));
+  }
+  return g;
+}
+new Chart(document.getElementById('cGold'), {
+  type:'line',
+  data:{labels: waves, datasets:[
+    {label:'0 道具', data: waves.map(w=>goldCumWave(w,0)), borderColor:'#a8794a', tension:0.2 },
+    {label:'1 摇钱树', data: waves.map(w=>goldCumWave(w,1)), borderColor:'#57cc99', tension:0.2 },
+    {label:'10 摇钱树', data: waves.map(w=>goldCumWave(w,10)), borderColor:'#e8b04b', tension:0.2 },
+  ]},
+  options:{responsive:false, scales:{y:{type:'logarithmic'}}}
+});
+
+// 5. player HP / armor progression baseline (no items)
+new Chart(document.getElementById('cHP'), {
+  type:'line',
+  data:{labels: waves, datasets:[
+    {label:'生命上限 (基准 100)', data: waves.map(()=>100), borderColor:'#57cc99' },
+    {label:'护甲 (基准 0)', data: waves.map(()=>0), borderColor:'#c9a227' },
+  ]},
+  options:{responsive:false}
+});
+
+// 6. expected vs observed kill times
+const observedAvgK = [16.5,16.6,17.4,17.8,16.8,17,16.4,17.5,16.4,17,17.3,16.8,17.5,17,16.6,16.5,16.5,15.8,15.8,4.1,15.6,15.8,15.7,15.3,15.6,15.8,16,16.4,16.9,16.9,69.3];
+new Chart(document.getElementById('cKillT'), {
+  type:'line',
+  data:{labels: waves, datasets:[
+    {label:'实测 avgKillTime (run0)', data: observedAvgK, borderColor:'#ff5d5d', tension:0.1, fill:false },
+    {label:'期望 8-12s', data: waves.map(()=>9), borderColor:'#57cc99', borderDash:[6,4] },
+  ]},
+  options:{responsive:false, scales:{y:{min:0,max:25}}}
+});
+</script>
+</body>
+</html>
